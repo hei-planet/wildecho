@@ -1,0 +1,29 @@
+input_dir: "data/"
+output_dir: "outputs/dev/"
+file_glob: "*.WAV"
+
+vad:
+  enabled: true
+  backend: onnx
+
+diarization:
+  enabled: false
+
+bird_detection:
+  enabled: true
+  threads: auto
+  batch_size: 8
+
+performance:
+  file_workers: 1
+  max_file_workers: 1
+  resampler: soxr_hq
+  resume: false
+
+outputs:
+  per_file_json: true
+  summary_csv: true
+  readable_csvs: true
+
+logging:
+  level: DEBUG

@@ -1,0 +1,60 @@
+# WildEcho v0.5.0 — optimized defaults
+
+input_dir: "data/"
+output_dir: "outputs/"
+file_glob: "*.WAV"
+
+audio:
+  native_sample_rate: 48000
+
+qc:
+  min_duration_sec: 1.0
+  max_duration_sec: 7200.0
+  check_clipping: true
+  clipping_threshold: 0.99
+
+vad:
+  enabled: true
+  sample_rate: 16000
+  backend: onnx              # faster CPU backend; use torch only for compatibility
+  threshold: 0.5
+  min_speech_duration_ms: 250
+  min_silence_duration_ms: 100
+
+diarization:
+  enabled: true
+  backend: diarize
+  sample_rate: 16000
+  min_speakers: 1
+  max_speakers: 10
+  device: cpu
+  min_embedding_segment_sec: 0.4
+  fail_on_error: false        # keep BirdNET/VAD results if speaker estimation is unavailable
+
+bird_detection:
+  enabled: true
+  sample_rate: 48000
+  min_confidence: 0.25
+  overlap_sec: 0.0
+  latitude: null
+  longitude: null
+  threads: auto              # removes birdnetlib's hardcoded one-thread limit
+  batch_size: 8              # 8 windows per TFLite call instead of one
+
+performance:
+  file_workers: auto         # conservative CPU/RAM-aware process count
+  max_file_workers: 4
+  resampler: soxr_hq         # direct libsoxr; much faster than the old librosa path
+  resume: false              # true reuses matching v0.4 JSON results
+
+outputs:
+  per_file_json: true
+  summary_csv: true
+  readable_csvs: true         # recordings.csv, bird_detections.csv, speech_segments.csv
+  save_intermediate: false
+  include_detected_signals: true
+  include_bird_species_list: true
+
+logging:
+  level: INFO
+  log_file: null
