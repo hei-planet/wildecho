@@ -1,0 +1,68 @@
+# Changelog
+
+## 0.5.0 — WildEcho
+
+- Renamed the public project from AudioMoth Pipeline to WildEcho.
+- Renamed the command-line program from `audiomoth-pipeline` to `wildecho`.
+- Added `WILDECHO_*` performance environment variables while retaining compatibility with the older names.
+- Prepared the repository for a clean organization-owned GitHub history.
+
+## 0.4.1 — 2026-08-04
+
+### Diarization reliability
+
+- Converted empty speaker-embedding results into explicit `insufficient_speech`, `no_embeddings`, or `failed` statuses.
+- Stopped reporting zero speakers when speech was detected but the speaker estimate was unavailable.
+- Added a configurable minimum usable speech-segment duration and non-fatal error policy.
+- Writes temporary diarization audio explicitly as PCM16 for broad embedding-runtime compatibility.
+- Suppressed the ambiguous upstream warning and replaced it with a concise per-file warning in the main progress log.
+- Preserved bird–human speech overlap using Silero VAD intervals whenever speaker identities are unavailable.
+
+### Readable reports
+
+- Added `recordings.csv`, one readable row per recording.
+- Added `bird_detections.csv`, one row per bird detection.
+- Added `speech_segments.csv`, one row per VAD or diarized speech segment.
+- Added plain-English diarization notes and status fields to JSON and CSV output.
+- Kept `summary.csv` unchanged for backward compatibility.
+
+### Tests
+
+- Added tests for short-speech handling, empty embedding results, VAD overlap fallback, and readable CSV generation.
+
+## 0.4.0 — 2026-08-04
+
+### Performance
+
+- Switched Silero VAD to its ONNX CPU backend by default.
+- Replaced the previous resampling path with direct `soxr` calls.
+- Removed BirdNET temporary-WAV creation and its second audio decode.
+- Added batched BirdNET inference with a configurable batch size.
+- Rebuilt BirdNET's TFLite interpreter with configurable CPU threads.
+- Added safe multi-process file processing with automatic CPU/RAM-aware worker selection.
+- Reused the same 16 kHz buffer for VAD and diarization.
+- Kept the no-speech diarization short circuit.
+- Prevented nested Torch, BLAS, and numerical-library thread pools from oversubscribing the CPU.
+
+### Reliability
+
+- Added a safe single-worker `make run-safe` command.
+- Added automatic BirdNET fallback to batch size 1 if batched tensors are unsupported.
+- Added optional fingerprint-checked resume support.
+- Kept summary output in deterministic input order during parallel runs.
+- Corrected human-speech overlap to use interval union rather than double-counting overlapping speakers.
+- Added performance configuration validation and environment overrides.
+
+### Reporting
+
+- Startup logs now show workers, BirdNET threads, resampler, detected CPUs, and available RAM.
+- Parallel progress and ETA are based on completed files.
+- Final throughput reports wall-clock performance while stage totals report cumulative worker time.
+
+### Tests
+
+- Added tests for batched BirdNET input, fixed final-batch padding, fast resampling, environment overrides, configuration validation, and parallel batch execution.
+
+## 0.3.0 — 2026-08-04
+
+- Added `make run`, colored progress, per-stage timings, ETA, `pipeline.log`, and final performance reporting.
