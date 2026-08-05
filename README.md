@@ -11,7 +11,7 @@ Analyze AudioMoth WAV recordings for:
 
 Current version: **v0.5.0**
 
-> **Repository maintainers:** see [`GITHUB_SETUP.md`](GITHUB_SETUP.md) to create the organization-owned repository safely.
+> **Repository maintainers:**
 
 Supported systems:
 
@@ -102,7 +102,7 @@ The commands are the same on Arch Linux and macOS:
 mkdir -p ~/Projects
 cd ~/Projects
 
-git clone https://github.com/heiplanet/wildecho.git
+git clone https://github.com/hei-planet/wildecho.git
 cd wildecho
 ```
 
@@ -153,84 +153,12 @@ AudioMoth-Pipeline/
 └── Makefile
 ```
 
-### Copy recordings on Arch Linux
-
-Insert the AudioMoth SD card and find its mount path:
-
-```bash
-lsblk
-```
-
-The card is usually mounted under:
-
-```text
-/run/media/<username>/<card-name>/
-```
-
-Example:
-
-```bash
-cd ~/Projects/wildecho
-
-cp /run/media/$USER/AUDIOMOTH/*.WAV data/
-```
-
-Replace:
-
-```text
-/run/media/$USER/AUDIOMOTH
-```
-
-with the real SD-card path.
-
-### Copy recordings on macOS
-
-Insert the AudioMoth SD card and list mounted drives:
-
-```bash
-ls /Volumes
-```
-
-The card may appear as:
-
-```text
-AUDIOMOTH
-```
-
-Copy the recordings:
-
-```bash
-cd ~/Projects/wildecho
-
-cp /Volumes/AUDIOMOTH/*.WAV data/
-```
-
-Replace:
-
-```text
-/Volumes/AUDIOMOTH
-```
-
-with the real SD-card path.
-
-### Check the number of copied recordings
-
-Run:
-
-```bash
-find data -maxdepth 1 -type f -iname "*.wav" | wc -l
-```
-
-This should match the number of recordings you expect.
-
-> The current pipeline scans the configured folder directly. Recordings inside subfolders are not included unless `input_dir` points to the correct subfolder.
-
 ## 5. Configure the pipeline
 
 Open the default configuration:
 
-```bash
-nano configs/default.yaml
+```yaml
+configs/default.yaml
 ```
 
 The main settings are:
@@ -239,14 +167,6 @@ The main settings are:
 input_dir: "data/"
 output_dir: "outputs/"
 file_glob: "*.WAV"
-```
-
-Save Nano with:
-
-```text
-Ctrl + O
-Enter
-Ctrl + X
 ```
 
 Validate the configuration:
@@ -529,4 +449,3 @@ open outputs/recordings.csv
 ```
 
 Do not delete the original SD-card recordings until the copied recordings and analysis results have been backed up.
- 
