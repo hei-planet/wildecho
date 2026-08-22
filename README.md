@@ -1,451 +1,386 @@
-# WildEcho
+WildEcho
 
-Analyze AudioMoth WAV recordings for:
+WildEcho analyzes AudioMoth .WAV recordings for:
 
-- bird detections with BirdNET;
-- human speech detection with Silero VAD;
-- estimated speaker count with diarization;
-- bird and human-speech overlap;
-- per-stage processing times;
-- readable CSV and JSON results.
+bird detections with BirdNET
+human speech with Silero VAD
+estimated speaker count with diarization
+bird detections overlapping human speech
+processing time for each analysis stage
+easy-to-read CSV and JSON results
 
-Current version: **v0.5.0**
+Current version: v0.5.0
 
-> **Repository maintainers:**
+Supported systems
+Windows 10/11 — PowerShell / Windows Terminal
+Arch Linux
+macOS
+Installation
+Windows
 
-Supported systems:
+Open PowerShell/Terminal.
 
-- **Arch Linux**
-- **macOS**
+Install Git:
 
----
+winget install --id Git.Git -e
 
-## 1. Install the required programs
+Install FFmpeg:
 
-Choose the section for your operating system.
+winget install --id Gyan.FFmpeg -e
 
-### Arch Linux
+Install uv:
 
-Open Terminal and run:
+winget install --id astral-sh.uv -e
 
-```bash
-sudo pacman -Syu
-sudo pacman -S --needed git base-devel curl unzip ffmpeg libsndfile
-```
+Close and reopen PowerShell/Terminal.
 
-Install `uv`:
+Check:
 
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-
-Reload the shell:
-
-```bash
-source "$HOME/.local/bin/env"
-```
-
-Check the installation:
-
-```bash
 git --version
 uv --version
 ffmpeg -version
-```
+Arch Linux
 
-### macOS
+Open Terminal:
 
-Install Apple Command Line Tools:
+sudo pacman -Syu
+sudo pacman -S --needed git base-devel curl ffmpeg libsndfile
 
-```bash
-xcode-select --install
-```
+Install uv:
 
-A window will appear. Click **Install** and wait until it finishes.
-
-Install Homebrew:
-
-```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-```
-
-Configure Homebrew.
-
-```bash
-echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> "$HOME/.zprofile"
-eval "$(/opt/homebrew/bin/brew shellenv)"
-```
-
-Install the required programs:
-
-```bash
-brew install git make ffmpeg libsndfile
-```
-
-Install `uv`:
-
-```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
-```
 
 Reload the shell:
 
-```bash
 source "$HOME/.local/bin/env"
-```
 
-## 2. Clone the repository
+Check:
 
-The commands are the same on Arch Linux and macOS:
+git --version
+uv --version
+ffmpeg -version
+macOS
 
-```bash
+Open Terminal.
+
+Install Apple Command Line Tools:
+
+xcode-select --install
+
+Install Homebrew:
+
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+On Apple Silicon Macs:
+
+echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> "$HOME/.zprofile"
+eval "$(/opt/homebrew/bin/brew shellenv)"
+
+Install the required programs:
+
+brew install git ffmpeg libsndfile
+
+Install uv:
+
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+Reload the shell:
+
+source "$HOME/.local/bin/env"
+
+Check:
+
+git --version
+uv --version
+ffmpeg -version
+Download WildEcho
+Windows
+cd $HOME
+
+mkdir Projects -ErrorAction SilentlyContinue
+cd Projects
+
+git clone https://github.com/hei-planet/wildecho.git
+cd wildecho
+Linux / macOS
 mkdir -p ~/Projects
 cd ~/Projects
 
 git clone https://github.com/hei-planet/wildecho.git
 cd wildecho
-```
+Install WildEcho
 
-## 3. Install Python and the project
+These commands are the same on all systems:
 
-Install Python 3.13:
-
-```bash
 uv python install 3.13
-```
-
-Install the project:
-
-```bash
 uv sync --python 3.13
-```
 
-Check the pipeline version:
+Check the installation:
 
-```bash
 uv run wildecho --version
-```
 
-Run the tests:
+Optional: run the tests:
 
-```bash
 uv run pytest
-```
+Add your recordings
 
-## 4. Add AudioMoth recordings
+Put your AudioMoth .WAV files inside:
 
-Place the recordings inside:
-
-```text
 data/
-```
 
 Example:
 
-```text
-AudioMoth-Pipeline/
+wildecho/
 ├── data/
 │   ├── 20260315_092000.WAV
 │   ├── 20260315_093000.WAV
 │   └── 20260315_094000.WAV
 ├── configs/
 ├── outputs/
-└── Makefile
-```
+└── ...
+Copy from an SD card
+Windows
 
-## 5. Configure the pipeline
+If the AudioMoth SD card is D::
 
-Open the default configuration:
+Copy-Item "D:\*.WAV" "data\"
 
-```yaml
-configs/default.yaml
-```
+Check how many recordings were copied:
 
-The main settings are:
+(Get-ChildItem "data" -Filter "*.WAV").Count
+Arch Linux
 
-```yaml
-input_dir: "data/"
-output_dir: "outputs/"
-file_glob: "*.WAV"
-```
+Find the SD card:
 
-Validate the configuration:
+lsblk
 
-```bash
-uv run wildecho validate --config configs/default.yaml
-```
-
-Expected output:
-
-```text
-Config is valid
-```
-
-## 6. Run the pipeline
-
-Run:
-
-```bash
-make run
-```
-
-WildEcho will:
-
-1. load every matching WAV file;
-2. detect human speech;
-3. run speaker diarization only when speech is detected;
-4. run BirdNET;
-5. calculate bird and human-speech overlap;
-6. save CSV and JSON results.
-
-Stop the pipeline with:
-
-```text
-Ctrl + C
-```
-
-## Live log
-
-Example:
-
-```text
-✓ [   3/64]   4.7%  20260315_094000.WAV
-speech=no  spk=0  birds=10sp/52det
-load 0.14s  VAD 6.88s  diar 0.00s  BirdNET 10.74s  output 0.00s
-total 17.76s  ETA 19m 46s
-```
-
-| Field | Meaning |
-|---|---|
-| `speech=no` | No human speech detected |
-| `speech=yes` | Human speech detected |
-| `spk=0` | No speech, so no speakers |
-| `spk=2` | Two speakers estimated |
-| `spk=?` | Speech exists, but speaker estimation was unavailable |
-| `birds=10sp/52det` | 10 species and 52 bird detections |
-| `VAD` | Time used for speech detection |
-| `diar` | Time used for speaker diarization |
-| `BirdNET` | Time used for bird analysis |
-| `total` | Total processing time |
-| `ETA` | Estimated remaining batch time |
-
-## Diarization statuses
-
-### Successful diarization
-
-```text
-speech=yes  spk=2  diar=ok
-```
-
-Speech was detected and two speakers were estimated.
-
-### Speech too short
-
-```text
-speech=yes  spk=?  diar=too-short
-```
-
-Speech was detected, but the speech segments were too short for reliable speaker estimation.
-
-### Embeddings unavailable
-
-```text
-speech=yes  spk=?  diar=unavailable
-```
-
-Speech was detected, but the diarization backend could not produce reliable speaker embeddings.
-
-This does not stop BirdNET or speech detection. The recording is still included in the results.
-
-## 7. Open the results
-
-The output directory is:
-
-```text
-outputs/
-```
-
-### Arch Linux
-
-Open the folder:
-
-```bash
-xdg-open outputs
-```
-
-Open the recording overview:
-
-```bash
-xdg-open outputs/recordings.csv
-```
-
-### macOS
-
-Open the folder:
-
-```bash
-open outputs
-```
-
-Open the recording overview:
-
-```bash
-open outputs/recordings.csv
-```
-
-### Main output files
-
-#### `recordings.csv`
-
-One row per recording, including:
-
-- filename;
-- duration;
-- speech detected;
-- total speech duration;
-- estimated speakers;
-- diarization status;
-- number of bird species;
-- total bird detections;
-- top bird;
-- bird detections overlapping speech;
-- processing time;
-- errors.
-
-#### `bird_detections.csv`
-
-One row per BirdNET detection, including:
-
-- recording;
-- species;
-- confidence;
-- start time;
-- end time;
-- human-speech overlap.
-
-#### `speech_segments.csv`
-
-Speech and diarization intervals, including:
-
-- recording;
-- speech start;
-- speech end;
-- speaker label when available.
-
-#### Technical files
-
-```text
-outputs/summary.csv
-outputs/pipeline.log
-outputs/<recording-name>.json
-```
-
-Use:
-
-- `recordings.csv` for the simple overview;
-- `bird_detections.csv` for individual bird detections;
-- `speech_segments.csv` for human-speech intervals;
-- JSON files for complete technical results;
-- `pipeline.log` for debugging.
-
-## 8. Process a separate recording batch
-
-Create an input folder:
-
-```bash
-mkdir -p data/R4_W39
-```
-
-Copy recordings into it.
-
-Arch Linux example:
-
-```bash
-cp /run/media/$USER/AUDIOMOTH/*.WAV data/R4_W39/
-```
-
-macOS example:
-
-```bash
-cp /Volumes/AUDIOMOTH/*.WAV data/R4_W39/
-```
-
-Create a separate configuration:
-
-```bash
-cp configs/default.yaml configs/R4_W39.yaml
-nano configs/R4_W39.yaml
-```
-
-Change:
-
-```yaml
-input_dir: "data/R4_W39/"
-output_dir: "outputs/R4_W39/"
-```
-
-Run the batch:
-
-```bash
-make run CONFIG=configs/R4_W39.yaml
-```
-
-## 9. Performance options
-
-Run with automatic performance settings:
-
-```bash
-make run
-```
-
-Run with one safe worker:
-
-```bash
-make run-safe
-```
-
-Set the number of parallel workers:
-
-```bash
-make run WORKERS=2
-```
-
-Set workers and BirdNET threads:
-
-```bash
-make run WORKERS=2 BIRD_THREADS=4
-```
-
-Use fewer workers if the computer becomes unresponsive or runs out of memory.
-
-## Recommended workflow
-
-### Arch Linux
-
-```bash
-cd ~/Projects/wildecho
+Then copy the recordings, for example:
 
 cp /run/media/$USER/AUDIOMOTH/*.WAV data/
 
+Check the count:
+
 find data -maxdepth 1 -type f -iname "*.wav" | wc -l
+macOS
 
-make run
+List mounted drives:
 
-xdg-open outputs/recordings.csv
-```
+ls /Volumes
 
-### macOS
-
-```bash
-cd ~/Projects/wildecho
+Then copy the recordings, for example:
 
 cp /Volumes/AUDIOMOTH/*.WAV data/
 
+Check the count:
+
 find data -maxdepth 1 -type f -iname "*.wav" | wc -l
 
-make run
+Keep the original SD-card recordings until your copied files and analysis results have been backed up.
 
+Configuration
+
+The default configuration is:
+
+configs/default.yaml
+
+The important settings are:
+
+input_dir: "data/"
+output_dir: "outputs/"
+file_glob: "*.WAV"
+
+Validate it with:
+
+uv run wildecho validate --config configs/default.yaml
+
+Expected output:
+
+Config is valid
+Run WildEcho
+
+Use the same command on Windows, Linux, and macOS:
+
+uv run wildecho run --config configs/default.yaml
+
+WildEcho will:
+
+load each recording
+detect human speech
+run diarization only when speech is detected
+detect birds with BirdNET
+calculate bird/speech overlap
+save the results
+
+Stop the pipeline at any time with:
+
+Ctrl + C
+Live output
+
+Example:
+
+✓ [   3/64]   4.7%  20260315_094000.WAV
+  speech=no  spk=0  birds=10sp/52det
+  load 0.14s  VAD 6.88s  diar 0.00s  BirdNET 10.74s
+  total 17.76s  ETA 19m 46s
+Output	Meaning
+speech=no	No human speech detected
+speech=yes	Human speech detected
+spk=0	No speech, therefore no speakers
+spk=2	Two speakers estimated
+spk=?	Speech exists but speaker estimation was unavailable
+birds=10sp/52det	10 bird species, 52 total detections
+VAD	Speech-detection processing time
+diar	Speaker-diarization processing time
+BirdNET	BirdNET processing time
+total	Total processing time for the recording
+ETA	Estimated remaining processing time
+Diarization status
+
+Successful:
+
+speech=yes  spk=2  diar=ok
+
+Speech was detected and two speakers were estimated.
+
+Too little usable speech:
+
+speech=yes  spk=?  diar=too-short
+
+Speech exists, but the segments are too short for reliable speaker estimation.
+
+Speaker embeddings unavailable:
+
+speech=yes  spk=?  diar=unavailable
+
+Speech was detected, but the diarization model could not reliably estimate the speakers.
+
+This does not stop the analysis. BirdNET and speech results are still saved.
+
+Results
+
+Results are saved inside:
+
+outputs/
+
+The main files are:
+
+outputs/
+├── recordings.csv
+├── bird_detections.csv
+├── speech_segments.csv
+├── summary.csv
+├── pipeline.log
+└── <recording-name>.json
+recordings.csv
+
+The easiest file to use.
+
+One row per recording with:
+
+filename
+duration
+speech detected
+speech duration
+estimated speakers
+diarization status
+number of bird species
+number of bird detections
+top bird
+bird/speech overlap
+processing time
+errors
+bird_detections.csv
+
+One row per BirdNET detection with:
+
+recording
+species
+confidence
+start time
+end time
+human-speech overlap
+speech_segments.csv
+
+Human-speech intervals with:
+
+recording
+start time
+end time
+speaker label when available
+JSON files
+
+Each recording also gets a detailed JSON result.
+
+Open the results
+Windows
+Invoke-Item "outputs\recordings.csv"
+
+Or open the entire folder:
+
+explorer.exe outputs
+Arch Linux
+xdg-open outputs/recordings.csv
+macOS
 open outputs/recordings.csv
-```
+Separate recording batches
 
-Do not delete the original SD-card recordings until the copied recordings and analysis results have been backed up.
+For different sites, weeks, or AudioMoth devices, keep each batch separate.
+
+Example:
+
+data/
+├── R4_W39/
+└── R5_W39/
+
+outputs/
+├── R4_W39/
+└── R5_W39/
+
+Copy the default configuration:
+
+Windows
+Copy-Item configs\default.yaml configs\R4_W39.yaml
+Linux / macOS
+cp configs/default.yaml configs/R4_W39.yaml
+
+Edit:
+
+input_dir: "data/R4_W39/"
+output_dir: "outputs/R4_W39/"
+
+Then run:
+
+uv run wildecho run --config configs/R4_W39.yaml
+Performance
+
+WildEcho automatically selects reasonable performance settings.
+
+If you want to control them manually:
+
+Windows PowerShell
+$env:WILDECHO_FILE_WORKERS = "2"
+$env:WILDECHO_BIRDNET_THREADS = "4"
+
+uv run wildecho run --config configs/default.yaml
+Linux / macOS
+WILDECHO_FILE_WORKERS=2 \
+WILDECHO_BIRDNET_THREADS=4 \
+uv run wildecho run --config configs/default.yaml
+
+Use fewer workers if the computer runs out of memory or becomes unresponsive.
+
+Update WildEcho
+git pull --ff-only
+uv sync --python 3.13
+Quick workflow
+
+Once WildEcho is installed, the normal workflow is:
+
+Copy .WAV recordings into data/
+Check the recording count
+Run:
+uv run wildecho run --config configs/default.yaml
+Open:
+outputs/recordings.csv
+
+That's it.
