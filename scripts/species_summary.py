@@ -66,9 +66,7 @@ def _read_inputs(paths: list[Path]) -> pd.DataFrame:
         if missing:
             missing_list = ", ".join(sorted(missing))
             raise ValueError(f"{path} is missing required columns: {missing_list}")
-        frame = frame.copy()
-        frame["_source_csv"] = str(path)
-        frames.append(frame)
+        frames.append(frame.copy())
 
     if not frames:
         return pd.DataFrame(columns=sorted(REQUIRED_COLUMNS))
@@ -77,22 +75,22 @@ def _read_inputs(paths: list[Path]) -> pd.DataFrame:
 
 def build_species_summary(detections: pd.DataFrame) -> pd.DataFrame:
     """Aggregate existing WildEcho bird detections by species."""
+    output_columns = [
+        "species",
+        "common_name",
+        "detections",
+        "recordings_detected_in",
+        "confidence_range",
+        "confidence_min",
+        "confidence_max",
+        "confidence_mean",
+        "confidence_median",
+        "detected_duration_seconds",
+        "detected_duration_minutes",
+        "merged_detection_segments",
+    ]
     if detections.empty:
-        return pd.DataFrame(
-            columns=[
-                "species",
-                "common_name",
-                "detections",
-                "recordings_detected_in",
-                "confidence_min",
-                "confidence_max",
-                "confidence_mean",
-                "confidence_median",
-                "detected_duration_seconds",
-                "detected_duration_minutes",
-                "merged_detection_segments",
-            ]
-        )
+        return pd.DataFrame(columns=output_columns)
 
     data = detections.copy()
     data["Start (seconds)"] = pd.to_numeric(data["Start (seconds)"], errors="coerce")
@@ -157,11 +155,16 @@ def build_species_summary(detections: pd.DataFrame) -> pd.DataFrame:
         "detected_duration_minutes",
     ]
     summary[numeric_columns] = summary[numeric_columns].round(4)
+    summary["confidence_range"] = summary.apply(
+        lambda row: f"{row['confidence_min']:.4f}-{row['confidence_max']:.4f}",
+        axis=1,
+    )
 
-    return summary.sort_values(
+    summary = summary.sort_values(
         ["detections", "detected_duration_seconds", "species"],
         ascending=[False, False, True],
     ).reset_index(drop=True)
+    return summary[output_columns]
 
 
 def main() -> None:
