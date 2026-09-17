@@ -1,7 +1,7 @@
 # WildEcho v0.7.0 — research defaults for the current AudioMoth deployment
 
-input_dir: "data/"
-output_dir: "outputs/"
+input_dir: "data/N3"
+output_dir: "outputs/N3"
 file_glob: "*.WAV"
 
 audio:
