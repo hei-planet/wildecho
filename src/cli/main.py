@@ -16,13 +16,28 @@ from pipeline.utils import load_dotenv
 @click.version_option(package_name="wildecho")
 def main() -> None:
     """WildEcho — speech detection, speaker estimation, and bird detection."""
-    # Load .env from the current working directory if present (optional).
     load_dotenv(".env")
+
+
+def _validated_config(path: Path):
+    """Load a config and exit with readable errors when it is invalid."""
+    try:
+        cfg = load_config(path)
+    except (OSError, ValueError) as exc:
+        click.echo(f"Config error: {exc}", err=True)
+        raise click.exceptions.Exit(1) from exc
+    errors = validate_config(cfg)
+    if errors:
+        for error in errors:
+            click.echo(f"Config error: {error}", err=True)
+        raise click.exceptions.Exit(1)
+    return cfg
 
 
 @main.command()
 @click.option(
-    "--config", "-c",
+    "--config",
+    "-c",
     type=click.Path(exists=True, path_type=Path),
     default="configs/default.yaml",
     help="Path to YAML config file.",
@@ -31,24 +46,21 @@ def run(config: Path) -> None:
     """Run the full pipeline on all files in the configured input directory."""
     from pipeline.runner import run_pipeline
 
-    cfg = load_config(config)
-    errors = validate_config(cfg)
-    if errors:
-        for e in errors:
-            click.echo(f"Config error: {e}", err=True)
-        sys.exit(1)
-    run_pipeline(cfg)
+    run_pipeline(_validated_config(config))
 
 
 @main.command(name="run-file")
 @click.option(
-    "--config", "-c",
+    "--config",
+    "-c",
     type=click.Path(exists=True, path_type=Path),
     default="configs/default.yaml",
     help="Path to YAML config file.",
 )
 @click.option(
-    "--file", "-f", "file_path",
+    "--file",
+    "-f",
+    "file_path",
     type=click.Path(exists=True, path_type=Path),
     required=True,
     help="Path to a single audio file to process.",
@@ -58,7 +70,7 @@ def run_file(config: Path, file_path: Path) -> None:
     from pipeline.runner import process_file
     from pipeline.utils import setup_logging
 
-    cfg = load_config(config)
+    cfg = _validated_config(config)
     cfg.output_dir.mkdir(parents=True, exist_ok=True)
     setup_logging(cfg.logging)
     record = process_file(file_path, cfg)
@@ -67,26 +79,31 @@ def run_file(config: Path, file_path: Path) -> None:
 
 @main.command()
 @click.option(
-    "--config", "-c",
+    "--config",
+    "-c",
     type=click.Path(exists=True, path_type=Path),
     required=True,
     help="Path to YAML config file to validate.",
 )
 def validate(config: Path) -> None:
     """Validate a config file and report any errors."""
-    cfg = load_config(config)
+    try:
+        cfg = load_config(config)
+    except (OSError, ValueError) as exc:
+        click.echo(f"  ✗ {exc}", err=True)
+        raise click.exceptions.Exit(1) from exc
     errors = validate_config(cfg)
     if errors:
-        for e in errors:
-            click.echo(f"  ✗ {e}", err=True)
-        sys.exit(1)
-    else:
-        click.echo("Config is valid ✓")
+        for error in errors:
+            click.echo(f"  ✗ {error}", err=True)
+        raise click.exceptions.Exit(1)
+    click.echo("Config is valid ✓")
 
 
 @main.command()
 @click.option(
-    "--output-dir", "-o",
+    "--output-dir",
+    "-o",
     type=click.Path(exists=True, path_type=Path),
     default="outputs/",
     help="Outputs directory to inspect.",
@@ -102,13 +119,13 @@ def inspect(output_dir: Path) -> None:
 
     if json_files:
         click.echo("\nPer-file results:")
-        for jf in json_files:
-            click.echo(f"  {jf.name}")
+        for json_file in json_files:
+            click.echo(f"  {json_file.name}")
 
     if csv_files:
         click.echo("\nSummary files:")
-        for cf in csv_files:
-            click.echo(f"  {cf.name}")
+        for csv_file in csv_files:
+            click.echo(f"  {csv_file.name}")
 
 
 if __name__ == "__main__":

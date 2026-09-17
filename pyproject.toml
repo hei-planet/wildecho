@@ -1,6 +1,6 @@
 [project]
 name = "wildecho"
-version = "0.5.0"
+version = "0.6.0"
 description = "Fast local analysis of AudioMoth recordings with BirdNET, speech detection, and speaker diarization."
 readme = "README.md"
 requires-python = ">=3.12,<3.14"
@@ -14,18 +14,13 @@ dependencies = [
     "soxr>=0.5",
     "pyyaml>=6.0",
     "pandas>=2.2",
-    # VAD / speech detection
     "silero-vad>=5.1",
     "onnxruntime>=1.16",
     "torch>=2.2",
     "torchaudio>=2.2",
-    # Speaker diarization — CPU-only, no HuggingFace token, no GPU required.
-    # https://github.com/FoxNoseTech/diarize
     "diarize>=0.1.1",
-    # Bird detection
     "birdnetlib>=0.16",
     "ai-edge-litert>=2.1",
-    # CLI
     "click>=8.1",
 ]
 
@@ -56,4 +51,3 @@ select = ["E", "F", "W", "I", "UP", "B", "SIM"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
-
