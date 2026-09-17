@@ -12,14 +12,11 @@ import pandas as pd
 from models.bird_detection import BirdDetection, BirdDetectionResult
 from models.bird_filter import is_bird_detection
 from models.diarization import DiarizationResult, SpeakerSegment
-from models.vad import SpeechSegment, VADResult
+from models.vad import VADResult
 from pipeline.config import OutputsConfig  # noqa: F401  (re-exported for tests)
 from preprocessing.qc import QCResult
 
 logger = logging.getLogger(__name__)
-
-
-# ── Overlap helpers ─────────────────────────────────────────────────────────
 
 
 def _bird_human_overlap(
@@ -85,9 +82,6 @@ def _speech_basis(
     return [], [], "none"
 
 
-# ── Record builder ──────────────────────────────────────────────────────────
-
-
 def build_file_record(
     qc: QCResult,
     vad: VADResult | None,
@@ -150,13 +144,7 @@ def build_file_record(
         record["speakers"] = []
         record["human_speech_segments"] = []
 
-    # When speaker estimation is unavailable, preserve VAD speech timing in a
-    # user-facing segment list without pretending that a speaker identity exists.
-    if (
-        not record["human_speech_segments"]
-        and vad is not None
-        and vad.speech_detected
-    ):
+    if not record["human_speech_segments"] and vad is not None and vad.speech_detected:
         record["human_speech_segments"] = [
             {
                 "source": "vad",
@@ -171,6 +159,15 @@ def build_file_record(
     speech_intervals, speaker_segments, overlap_source = _speech_basis(vad, diarization)
 
     if birds is not None:
+        record["birdnet_location_filter_applied"] = birds.location_filter_applied
+        record["birdnet_week_48"] = birds.week_48
+        record["birdnet_candidate_species_count"] = birds.candidate_species_count
+        record["birdnet_latitude"] = birds.latitude
+        record["birdnet_longitude"] = birds.longitude
+        record["birdnet_species_frequency_threshold"] = birds.species_frequency_threshold
+        record["birdnet_sensitivity"] = birds.sensitivity
+        record["birdnet_overlap_sec"] = birds.overlap_sec
+
         all_detections = birds.detections
         bird_only = [
             detection
@@ -207,6 +204,14 @@ def build_file_record(
             for detection in bird_only
         ]
     else:
+        record["birdnet_location_filter_applied"] = None
+        record["birdnet_week_48"] = None
+        record["birdnet_candidate_species_count"] = None
+        record["birdnet_latitude"] = None
+        record["birdnet_longitude"] = None
+        record["birdnet_species_frequency_threshold"] = None
+        record["birdnet_sensitivity"] = None
+        record["birdnet_overlap_sec"] = None
         record["num_bird_species"] = None
         if outputs_cfg.include_detected_signals:
             record["detected_signals"] = []
@@ -215,9 +220,6 @@ def build_file_record(
         record["bird_detections"] = []
 
     return record
-
-
-# ── Writers ─────────────────────────────────────────────────────────────────
 
 
 def save_file_json(record: dict, output_dir: Path) -> Path:
@@ -295,6 +297,12 @@ def _readable_record(record: dict) -> dict:
         "Estimated speakers": speaker_display,
         "Diarization status": record.get("diarization_status"),
         "Diarization note": record.get("diarization_message") or "",
+        "BirdNET latitude": record.get("birdnet_latitude"),
+        "BirdNET longitude": record.get("birdnet_longitude"),
+        "BirdNET week (1-48)": record.get("birdnet_week_48"),
+        "BirdNET candidate species": record.get("birdnet_candidate_species_count"),
+        "BirdNET sensitivity": record.get("birdnet_sensitivity"),
+        "BirdNET overlap (seconds)": record.get("birdnet_overlap_sec"),
         "Bird species": record.get("num_bird_species"),
         "Bird detections": len(detections),
         "Top bird": top_name,

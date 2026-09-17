@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+import calendar
 import importlib
 import logging
+import math
 import os
+import re
 import sys
 from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import datetime
 from functools import lru_cache
+from pathlib import Path
 
 import numpy as np
 
@@ -30,7 +35,6 @@ logger = logging.getLogger(__name__)
 
 _BIRDNET_WINDOW_SEC = 3.0
 _BIRDNET_MIN_FINAL_WINDOW_SEC = 1.5
-_LOCATION_FILTER_THRESHOLD = 0.03
 
 
 @dataclass
@@ -47,6 +51,14 @@ class BirdDetectionResult:
     detections: list[BirdDetection]
     num_species: int
     species_list: list[str]
+    location_filter_applied: bool = False
+    week_48: int | None = None
+    candidate_species_count: int | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    species_frequency_threshold: float | None = None
+    sensitivity: float = 1.0
+    overlap_sec: float = 0.0
 
 
 @contextmanager
@@ -138,20 +150,69 @@ def _ensure_batch_shape(analyzer, batch_size: int, window_samples: int) -> None:
     analyzer._audiomoth_batch_shape = shape
 
 
-def _allowed_species(analyzer, cfg: BirdDetectionConfig) -> set[str] | None:
+def _recording_datetime(path: Path) -> datetime | None:
+    """Extract the recording timestamp from common AudioMoth-style filenames."""
+    stem = path.stem
+    compact = re.search(r"(?<!\d)(\d{8})[_-](\d{6})(?!\d)", stem)
+    if compact:
+        try:
+            return datetime.strptime("".join(compact.groups()), "%Y%m%d%H%M%S")
+        except ValueError:
+            pass
+
+    expanded = re.search(
+        r"(?<!\d)(\d{4}-\d{2}-\d{2})[T_ -](\d{2})[:.-]?(\d{2})[:.-]?(\d{2})(?!\d)",
+        stem,
+    )
+    if expanded:
+        try:
+            return datetime.strptime("".join(expanded.groups()), "%Y-%m-%d%H%M%S")
+        except ValueError:
+            pass
+    return None
+
+
+def _week_48_from_datetime(recorded_at: datetime) -> int:
+    """Match birdnetlib's 48-bin day-of-year conversion exactly."""
+    day_of_year = recorded_at.timetuple().tm_yday
+    days_in_year = 366 if calendar.isleap(recorded_at.year) else 365
+    return math.ceil((day_of_year / days_in_year) * 48)
+
+
+def _resolve_week_48(audio: AudioData, cfg: BirdDetectionConfig) -> int:
+    if isinstance(cfg.week_48, int):
+        return cfg.week_48
+
+    recorded_at = _recording_datetime(audio.path)
+    if recorded_at is None:
+        logger.warning(
+            "Could not infer BirdNET week from %s; using year-round location filter",
+            audio.path.name,
+        )
+        return -1
+    return _week_48_from_datetime(recorded_at)
+
+
+def _allowed_species(
+    analyzer,
+    audio: AudioData,
+    cfg: BirdDetectionConfig,
+) -> tuple[set[str] | None, int | None]:
     if cfg.latitude is None or cfg.longitude is None:
-        return None
-    key = f"wildecho-{cfg.longitude}-{cfg.latitude}-{_LOCATION_FILTER_THRESHOLD}"
+        return None, None
+
+    week_48 = _resolve_week_48(audio, cfg)
+    threshold = float(cfg.species_frequency_threshold)
+    key = f"wildecho-{cfg.longitude}-{cfg.latitude}-{week_48}-{threshold}"
     if key not in analyzer.cached_species_lists:
         with _silence_stdio():
             analyzer.cached_species_lists[key] = analyzer.return_predicted_species_list(
                 lon=cfg.longitude,
                 lat=cfg.latitude,
-                week_48=-1,
-                filter_threshold=_LOCATION_FILTER_THRESHOLD,
+                week_48=week_48,
+                filter_threshold=threshold,
             )
-    allowed = set(analyzer.cached_species_lists[key])
-    return allowed or None
+    return set(analyzer.cached_species_lists[key]), week_48
 
 
 def _batched_predictions(
@@ -160,6 +221,7 @@ def _batched_predictions(
     sample_rate: int,
     overlap_sec: float,
     batch_size: int,
+    sensitivity: float = 1.0,
 ):
     window_samples = int(_BIRDNET_WINDOW_SEC * sample_rate)
     starts = _chunk_starts(len(samples), sample_rate, overlap_sec)
@@ -173,7 +235,7 @@ def _batched_predictions(
             analyzer.interpreter.get_tensor(analyzer.output_layer_index),
             dtype=np.float32,
         )
-        probabilities = analyzer.flat_sigmoid(logits, sensitivity=-1.0)
+        probabilities = analyzer.flat_sigmoid(logits, sensitivity=-float(sensitivity))
         yield starts[offset : offset + valid], probabilities[:valid]
 
 
@@ -194,6 +256,7 @@ def _infer_detections(
         audio.sample_rate,
         cfg.overlap_sec,
         batch_size,
+        cfg.sensitivity,
     )
     for starts, probabilities in batches:
         for start_sample, scores in zip(starts, probabilities, strict=True):
@@ -228,6 +291,10 @@ def run_bird_detection(audio: AudioData, cfg: BirdDetectionConfig) -> BirdDetect
         raise ValueError("bird_detection.batch_size must be >= 1")
     if not 0.01 <= cfg.min_confidence <= 0.99:
         raise ValueError("bird_detection.min_confidence must be in [0.01, 0.99]")
+    if not 0.5 <= cfg.sensitivity <= 1.5:
+        raise ValueError("bird_detection.sensitivity must be in [0.5, 1.5]")
+    if not 0.01 <= cfg.species_frequency_threshold <= 0.99:
+        raise ValueError("bird_detection.species_frequency_threshold must be in [0.01, 0.99]")
 
     threads = cfg.threads if isinstance(cfg.threads, int) else None
     analyzer = _get_analyzer(threads)
@@ -235,7 +302,7 @@ def run_bird_detection(audio: AudioData, cfg: BirdDetectionConfig) -> BirdDetect
     if samples.ndim > 1:
         samples = np.ascontiguousarray(samples.mean(axis=1), dtype=np.float32)
 
-    allowed = _allowed_species(analyzer, cfg)
+    allowed, week_48 = _allowed_species(analyzer, audio, cfg)
     threshold = float(cfg.min_confidence)
     labels = list(analyzer.labels)
 
@@ -277,4 +344,14 @@ def run_bird_detection(audio: AudioData, cfg: BirdDetectionConfig) -> BirdDetect
         detections=detections,
         num_species=len(species_set),
         species_list=species_set,
+        location_filter_applied=allowed is not None,
+        week_48=week_48,
+        candidate_species_count=len(allowed) if allowed is not None else None,
+        latitude=cfg.latitude,
+        longitude=cfg.longitude,
+        species_frequency_threshold=(
+            float(cfg.species_frequency_threshold) if allowed is not None else None
+        ),
+        sensitivity=float(cfg.sensitivity),
+        overlap_sec=float(cfg.overlap_sec),
     )

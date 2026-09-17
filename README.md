@@ -2,272 +2,55 @@
 
 WildEcho analyzes AudioMoth `.WAV` recordings for:
 
-* bird detections with **BirdNET**
-* human speech with **Silero VAD**
-* estimated speaker count with **diarization**
-* bird detections overlapping human speech
-* processing time for each analysis stage
-* easy-to-read CSV and JSON results
+- bird detections with **BirdNET**
+- human speech with **Silero VAD**
+- estimated speaker count with **diarization**
+- bird detections overlapping human speech
+- reproducible CSV and JSON results
 
-**Current version:** `v0.5.0`
+**Current version:** `v0.7.0`
 
 ## Supported systems
 
-* Windows 10/11 — PowerShell / Windows Terminal
-* Arch Linux
-* macOS
+- Windows 10/11
+- Arch Linux
+- macOS
 
----
+## Installation
 
-# Installation
-
-## Windows
-
-Open **PowerShell/Terminal**.
-
-Install Git:
-
-```powershell
-winget install --id Git.Git -e
-```
-
-Install FFmpeg:
-
-```powershell
-winget install --id Gyan.FFmpeg -e
-```
-
-Install `uv`:
-
-```powershell
-winget install --id astral-sh.uv -e
-```
-
-Close and reopen PowerShell/Terminal.
-
-Check:
-
-```powershell
-git --version
-uv --version
-ffmpeg -version
-```
-
----
-
-## Arch Linux
-
-Open **Terminal**:
+Install Git, FFmpeg, libsndfile where needed, and `uv`. Then:
 
 ```bash
-sudo pacman -Syu
-sudo pacman -S --needed git base-devel curl ffmpeg libsndfile
-```
-
-Install `uv`:
-
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-
-Reload the shell:
-
-```bash
-source "$HOME/.local/bin/env"
-```
-
-Check:
-
-```bash
-git --version
-uv --version
-ffmpeg -version
-```
-
----
-
-## macOS
-
-Open **Terminal**.
-
-Install Apple Command Line Tools:
-
-```bash
-xcode-select --install
-```
-
-Install Homebrew:
-
-```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-```
-
-On Apple Silicon Macs:
-
-```bash
-echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> "$HOME/.zprofile"
-eval "$(/opt/homebrew/bin/brew shellenv)"
-```
-
-Install the required programs:
-
-```bash
-brew install git ffmpeg libsndfile
-```
-
-Install `uv`:
-
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-
-Reload the shell:
-
-```bash
-source "$HOME/.local/bin/env"
-```
-
-Check:
-
-```bash
-git --version
-uv --version
-ffmpeg -version
-```
-
----
-
-# Download WildEcho
-
-## Windows
-
-```powershell
-cd $HOME
-
-mkdir Projects -ErrorAction SilentlyContinue
-cd Projects
-
 git clone https://github.com/hei-planet/wildecho.git
 cd wildecho
-```
-
-## Linux / macOS
-
-```bash
-mkdir -p ~/Projects
-cd ~/Projects
-
-git clone https://github.com/hei-planet/wildecho.git
-cd wildecho
-```
-
----
-
-# Install WildEcho
-
-These commands are the same on all systems:
-
-```bash
 uv python install 3.13
 uv sync --python 3.13
 ```
 
-Check the installation:
+Check:
 
 ```bash
 uv run wildecho --version
-```
-
-Optional: run the tests:
-
-```bash
 uv run pytest
 ```
 
----
+## Recordings
 
-# Add your recordings
-
-Put your AudioMoth `.WAV` files inside:
+Put AudioMoth WAV files in:
 
 ```text
 data/
 ```
 
-Example:
+WildEcho recognizes timestamped filenames such as:
 
 ```text
-wildecho/
-├── data/
-│   ├── 20260315_092000.WAV
-│   ├── 20260315_093000.WAV
-│   └── 20260315_094000.WAV
-├── configs/
-├── outputs/
-└── ...
+20260315_092000.WAV
 ```
 
-## Copy from an SD card
+This is interpreted as `2026-03-15 09:20:00`. When `week_48: auto` is enabled, WildEcho converts that date to the same 48-bin seasonal week used by BirdNET. The example above resolves to **BirdNET week 10**.
 
-### Windows
-
-If the AudioMoth SD card is `D:`:
-
-```powershell
-Copy-Item "D:\*.WAV" "data\"
-```
-
-Check how many recordings were copied:
-
-```powershell
-(Get-ChildItem "data" -Filter "*.WAV").Count
-```
-
-### Arch Linux
-
-Find the SD card:
-
-```bash
-lsblk
-```
-
-Then copy the recordings, for example:
-
-```bash
-cp /run/media/$USER/AUDIOMOTH/*.WAV data/
-```
-
-Check the count:
-
-```bash
-find data -maxdepth 1 -type f -iname "*.wav" | wc -l
-```
-
-### macOS
-
-List mounted drives:
-
-```bash
-ls /Volumes
-```
-
-Then copy the recordings, for example:
-
-```bash
-cp /Volumes/AUDIOMOTH/*.WAV data/
-```
-
-Check the count:
-
-```bash
-find data -maxdepth 1 -type f -iname "*.wav" | wc -l
-```
-
-> Keep the original SD-card recordings until your copied files and analysis results have been backed up.
-
----
-
-# Configuration
+## Configuration
 
 The default configuration is:
 
@@ -275,31 +58,41 @@ The default configuration is:
 configs/default.yaml
 ```
 
-The important settings are:
+The current BirdNET research settings are:
 
 ```yaml
-input_dir: "data/"
-output_dir: "outputs/"
-file_glob: "*.WAV"
+bird_detection:
+  enabled: true
+  sample_rate: 48000
+  min_confidence: 0.25
+  sensitivity: 1.0
+  overlap_sec: 2.0
+  latitude: 49.4085557730695
+  longitude: 8.661985343840124
+  week_48: auto
+  species_frequency_threshold: 0.03
+  threads: auto
+  batch_size: 8
 ```
 
-Validate it with:
+### What these settings mean
+
+- `min_confidence: 0.25` keeps a permissive set of raw BirdNET candidates for later species-specific validation/calibration.
+- `sensitivity: 1.0` uses BirdNET's standard score transformation and should remain fixed across a dataset.
+- `overlap_sec: 2.0` analyzes 3-second BirdNET windows every 1 second.
+- `latitude` and `longitude` restrict the candidate species pool to the recording location.
+- `week_48: auto` derives BirdNET's seasonal bin from the recording filename when possible.
+- `species_frequency_threshold: 0.03` applies the BirdNET location/season species-frequency filter.
+
+If WildEcho cannot infer the date from a filename while `week_48: auto` is selected, it logs a warning and uses BirdNET's year-round location filter rather than guessing a week.
+
+Validate the configuration with:
 
 ```bash
 uv run wildecho validate --config configs/default.yaml
 ```
 
-Expected output:
-
-```text
-Config is valid
-```
-
----
-
-# Run WildEcho
-
-Use the same command on Windows, Linux, and macOS:
+## Run WildEcho
 
 ```bash
 uv run wildecho run --config configs/default.yaml
@@ -308,86 +101,65 @@ uv run wildecho run --config configs/default.yaml
 WildEcho will:
 
 1. load each recording
-2. detect human speech
-3. run diarization only when speech is detected
-4. detect birds with BirdNET
-5. calculate bird/speech overlap
-6. save the results
+2. run quality control
+3. resample to 16 kHz and detect human speech with Silero VAD
+4. run speaker diarization only when usable speech is present
+5. analyze 48 kHz audio with BirdNET
+6. apply the configured location/season candidate-species filter
+7. calculate bird/human-speech overlap
+8. save JSON and CSV results
 
-Stop the pipeline at any time with:
+## BirdNET processing
 
-```text
-Ctrl + C
-```
-
----
-
-# Live output
-
-Example:
+With the default `overlap_sec: 2.0`, a recording is analyzed like this:
 
 ```text
-✓ [   3/64]   4.7%  20260315_094000.WAV
-  speech=no  spk=0  birds=10sp/52det
-  load 0.14s  VAD 6.88s  diar 0.00s  BirdNET 10.74s
-  total 17.76s  ETA 19m 46s
+0–3 s
+1–4 s
+2–5 s
+3–6 s
+...
 ```
 
-| Output             | Meaning                                              |
-| ------------------ | ---------------------------------------------------- |
-| `speech=no`        | No human speech detected                             |
-| `speech=yes`       | Human speech detected                                |
-| `spk=0`            | No speech, therefore no speakers                     |
-| `spk=2`            | Two speakers estimated                               |
-| `spk=?`            | Speech exists but speaker estimation was unavailable |
-| `birds=10sp/52det` | 10 bird species, 52 total detections                 |
-| `VAD`              | Speech-detection processing time                     |
-| `diar`             | Speaker-diarization processing time                  |
-| `BirdNET`          | BirdNET processing time                              |
-| `total`            | Total processing time for the recording              |
-| `ETA`              | Estimated remaining processing time                  |
+This improves coverage of calls that cross the boundary of a 3-second window, at the cost of more BirdNET inference work.
 
----
+BirdNET scores are detector scores, not direct probabilities that a species is present. WildEcho therefore keeps the raw threshold at `0.25`; species-specific reliability calibration should be performed from expert-validated detections rather than replacing it with one universal high cutoff.
 
-# Diarization status
+## Location and seasonal filtering
 
-Successful:
+When both coordinates are configured, WildEcho asks BirdNET for the expected species list using:
 
 ```text
-speech=yes  spk=2  diar=ok
+latitude + longitude + BirdNET week + species-frequency threshold
 ```
 
-Speech was detected and two speakers were estimated.
-
-Too little usable speech:
+For example:
 
 ```text
-speech=yes  spk=?  diar=too-short
+20260315_092000.WAV
+        ↓
+15 March 2026
+        ↓
+BirdNET week 10
+        ↓
+49.4085557730695, 8.661985343840124
+        ↓
+seasonally and geographically filtered candidate species
 ```
 
-Speech exists, but the segments are too short for reliable speaker estimation.
+The resolved context is saved with the output, including:
 
-Speaker embeddings unavailable:
+- latitude and longitude
+- BirdNET 48-week bin
+- whether location filtering was applied
+- candidate-species count
+- species-frequency threshold
+- sensitivity
+- overlap
 
-```text
-speech=yes  spk=?  diar=unavailable
-```
+## Results
 
-Speech was detected, but the diarization model could not reliably estimate the speakers.
-
-This does **not** stop the analysis. BirdNET and speech results are still saved.
-
----
-
-# Results
-
-Results are saved inside:
-
-```text
-outputs/
-```
-
-The main files are:
+Results are written to:
 
 ```text
 outputs/
@@ -399,140 +171,46 @@ outputs/
 └── <recording-name>.json
 ```
 
-## `recordings.csv`
+### `recordings.csv`
 
-The easiest file to use.
+One row per recording with QC, speech, speaker, BirdNET context, bird summary, overlap counts, timing, and errors.
 
-One row per recording with:
+### `bird_detections.csv`
 
-* filename
-* duration
-* speech detected
-* speech duration
-* estimated speakers
-* diarization status
-* number of bird species
-* number of bird detections
-* top bird
-* bird/speech overlap
-* processing time
-* errors
+One row per retained bird detection with species, score, time interval, and human-speech overlap.
 
-## `bird_detections.csv`
+### `speech_segments.csv`
 
-One row per BirdNET detection with:
+Human-speech intervals with speaker identity when diarization is available.
 
-* recording
-* species
-* confidence
-* start time
-* end time
-* human-speech overlap
+### Per-file JSON
 
-## `speech_segments.csv`
+The detailed JSON output includes model outputs plus the resolved BirdNET ecological settings needed to reproduce the analysis.
 
-Human-speech intervals with:
+## Separate deployments
 
-* recording
-* start time
-* end time
-* speaker label when available
-
-## JSON files
-
-Each recording also gets a detailed JSON result.
-
----
-
-# Open the results
-
-## Windows
-
-```powershell
-Invoke-Item "outputs\recordings.csv"
-```
-
-Or open the entire folder:
-
-```powershell
-explorer.exe outputs
-```
-
-## Arch Linux
+For another site or deployment, copy the configuration and change the coordinates rather than reusing the current site's values:
 
 ```bash
-xdg-open outputs/recordings.csv
+cp configs/default.yaml configs/site_02.yaml
 ```
 
-## macOS
-
-```bash
-open outputs/recordings.csv
-```
-
----
-
-# Separate recording batches
-
-For different sites, weeks, or AudioMoth devices, keep each batch separate.
-
-Example:
-
-```text
-data/
-├── R4_W39/
-└── R5_W39/
-
-outputs/
-├── R4_W39/
-└── R5_W39/
-```
-
-Copy the default configuration:
-
-### Windows
-
-```powershell
-Copy-Item configs\default.yaml configs\R4_W39.yaml
-```
-
-### Linux / macOS
-
-```bash
-cp configs/default.yaml configs/R4_W39.yaml
-```
-
-Edit:
+Then edit:
 
 ```yaml
-input_dir: "data/R4_W39/"
-output_dir: "outputs/R4_W39/"
+input_dir: "data/site_02/"
+output_dir: "outputs/site_02/"
+
+bird_detection:
+  latitude: <site latitude>
+  longitude: <site longitude>
 ```
 
-Then run:
+Keep sensitivity and the other scientific settings fixed across recordings that are intended to be compared directly, unless a documented calibration protocol requires otherwise.
 
-```bash
-uv run wildecho run --config configs/R4_W39.yaml
-```
+## Performance
 
----
-
-# Performance
-
-WildEcho automatically selects reasonable performance settings.
-
-If you want to control them manually:
-
-## Windows PowerShell
-
-```powershell
-$env:WILDECHO_FILE_WORKERS = "2"
-$env:WILDECHO_BIRDNET_THREADS = "4"
-
-uv run wildecho run --config configs/default.yaml
-```
-
-## Linux / macOS
+WildEcho automatically chooses conservative file workers and BirdNET CPU threads. They can be overridden with:
 
 ```bash
 WILDECHO_FILE_WORKERS=2 \
@@ -540,37 +218,11 @@ WILDECHO_BIRDNET_THREADS=4 \
 uv run wildecho run --config configs/default.yaml
 ```
 
-Use fewer workers if the computer runs out of memory or becomes unresponsive.
+Use fewer workers if memory is limited.
 
----
-
-#
-
-# Update WildEcho
+## Update
 
 ```bash
 git pull --ff-only
 uv sync --python 3.13
 ```
-
----
-
-# Quick workflow
-
-Once WildEcho is installed, the normal workflow is:
-
-1. Copy `.WAV` recordings into `data/`
-2. Check the recording count
-3. Run:
-
-```bash
-uv run wildecho run --config configs/default.yaml
-```
-
-4. Open:
-
-```text
-outputs/recordings.csv
-```
-
-That's it.

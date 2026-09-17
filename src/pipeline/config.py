@@ -51,9 +51,12 @@ class BirdDetectionConfig:
     enabled: bool = True
     sample_rate: int = 48_000
     min_confidence: float = 0.25
-    overlap_sec: float = 0.0
+    sensitivity: float = 1.0
+    overlap_sec: float = 2.0
     latitude: float | None = None
     longitude: float | None = None
+    week_48: int | str = "auto"
+    species_frequency_threshold: float = 0.03
     threads: int | str = "auto"
     batch_size: int = 8
 
@@ -163,6 +166,14 @@ def _positive_int_or_auto(value: int | str) -> bool:
     return str(value).lower() == "auto"
 
 
+def _valid_week_48(value: int | str) -> bool:
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, int):
+        return value == -1 or 1 <= value <= 48
+    return str(value).lower() == "auto"
+
+
 def validate_config(cfg: PipelineConfig) -> list[str]:
     errors = list(cfg.validation_issues)
     if not cfg.input_dir.exists():
@@ -179,12 +190,24 @@ def validate_config(cfg: PipelineConfig) -> list[str]:
         errors.append("diarization.min_embedding_segment_sec must be > 0")
     if not 0.01 <= cfg.bird_detection.min_confidence <= 0.99:
         errors.append("bird_detection.min_confidence must be in [0.01, 0.99]")
+    if not 0.5 <= cfg.bird_detection.sensitivity <= 1.5:
+        errors.append("bird_detection.sensitivity must be in [0.5, 1.5]")
+    if not 0 <= cfg.bird_detection.overlap_sec < 3.0:
+        errors.append("bird_detection.overlap_sec must be in [0, 3)")
+    if (cfg.bird_detection.latitude is None) != (cfg.bird_detection.longitude is None):
+        errors.append("bird_detection.latitude and longitude must be set together")
+    if cfg.bird_detection.latitude is not None and not -90 <= cfg.bird_detection.latitude <= 90:
+        errors.append("bird_detection.latitude must be in [-90, 90]")
+    if cfg.bird_detection.longitude is not None and not -180 <= cfg.bird_detection.longitude <= 180:
+        errors.append("bird_detection.longitude must be in [-180, 180]")
+    if not _valid_week_48(cfg.bird_detection.week_48):
+        errors.append("bird_detection.week_48 must be 'auto', -1, or an integer in [1, 48]")
+    if not 0.01 <= cfg.bird_detection.species_frequency_threshold <= 0.99:
+        errors.append("bird_detection.species_frequency_threshold must be in [0.01, 0.99]")
     if not _positive_int_or_auto(cfg.bird_detection.threads):
         errors.append("bird_detection.threads must be 'auto' or an integer >= 1")
     if cfg.bird_detection.batch_size < 1:
         errors.append("bird_detection.batch_size must be >= 1")
-    if not 0 <= cfg.bird_detection.overlap_sec < 3.0:
-        errors.append("bird_detection.overlap_sec must be in [0, 3)")
     if not _positive_int_or_auto(cfg.performance.file_workers):
         errors.append("performance.file_workers must be 'auto' or an integer >= 1")
     if cfg.performance.max_file_workers < 1:
