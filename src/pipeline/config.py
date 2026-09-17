@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from pathlib import Path
 
 import yaml
@@ -28,7 +28,7 @@ class QCConfig:
 class VADConfig:
     enabled: bool = True
     sample_rate: int = 16_000
-    backend: str = "onnx"  # onnx is normally much faster than torch on CPU
+    backend: str = "onnx"
     threshold: float = 0.5
     min_speech_duration_ms: int = 250
     min_silence_duration_ms: int = 100
@@ -60,8 +60,6 @@ class BirdDetectionConfig:
 
 @dataclass
 class PerformanceConfig:
-    """Runtime controls that affect speed but not scientific thresholds."""
-
     file_workers: int | str = "auto"
     max_file_workers: int = 4
     resampler: str = "soxr_hq"
@@ -86,8 +84,6 @@ class LoggingConfig:
 
 @dataclass
 class PipelineConfig:
-    """Complete pipeline configuration assembled from a YAML file."""
-
     input_dir: Path = field(default_factory=lambda: Path("data/"))
     output_dir: Path = field(default_factory=lambda: Path("outputs/"))
     file_glob: str = "*.WAV"
@@ -100,34 +96,64 @@ class PipelineConfig:
     performance: PerformanceConfig = field(default_factory=PerformanceConfig)
     outputs: OutputsConfig = field(default_factory=OutputsConfig)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
+    validation_issues: list[str] = field(default_factory=list, repr=False)
 
 
-def _build_section(cls: type, raw: dict | None):
-    """Instantiate a dataclass from a dict, ignoring unknown keys."""
+def _build_section(cls: type, raw: dict | None, name: str, issues: list[str]):
     if raw is None:
         return cls()
-    known = {f.name for f in cls.__dataclass_fields__.values()}
-    return cls(**{k: v for k, v in raw.items() if k in known})
+    if not isinstance(raw, dict):
+        issues.append(f"{name} must be a mapping/object")
+        return cls()
+    known = {item.name for item in fields(cls)}
+    for key in sorted(set(raw) - known):
+        issues.append(f"Unknown config key: {name}.{key}")
+    return cls(**{key: value for key, value in raw.items() if key in known})
 
 
 def load_config(path: Path) -> PipelineConfig:
-    """Load a YAML config file and return a PipelineConfig."""
     logger.info("Loading config from %s", path)
     with open(path) as fh:
-        raw: dict = yaml.safe_load(fh) or {}
+        raw = yaml.safe_load(fh) or {}
+    if not isinstance(raw, dict):
+        raise ValueError("Top-level YAML config must be a mapping/object")
+
+    issues: list[str] = []
+    top_level = {
+        "input_dir",
+        "output_dir",
+        "file_glob",
+        "audio",
+        "qc",
+        "vad",
+        "diarization",
+        "bird_detection",
+        "performance",
+        "outputs",
+        "logging",
+    }
+    for key in sorted(set(raw) - top_level):
+        issues.append(f"Unknown config key: {key}")
 
     return PipelineConfig(
         input_dir=Path(raw.get("input_dir", "data/")),
         output_dir=Path(raw.get("output_dir", "outputs/")),
         file_glob=raw.get("file_glob", "*.WAV"),
-        audio=_build_section(AudioConfig, raw.get("audio")),
-        qc=_build_section(QCConfig, raw.get("qc")),
-        vad=_build_section(VADConfig, raw.get("vad")),
-        diarization=_build_section(DiarizationConfig, raw.get("diarization")),
-        bird_detection=_build_section(BirdDetectionConfig, raw.get("bird_detection")),
-        performance=_build_section(PerformanceConfig, raw.get("performance")),
-        outputs=_build_section(OutputsConfig, raw.get("outputs")),
-        logging=_build_section(LoggingConfig, raw.get("logging")),
+        audio=_build_section(AudioConfig, raw.get("audio"), "audio", issues),
+        qc=_build_section(QCConfig, raw.get("qc"), "qc", issues),
+        vad=_build_section(VADConfig, raw.get("vad"), "vad", issues),
+        diarization=_build_section(
+            DiarizationConfig, raw.get("diarization"), "diarization", issues
+        ),
+        bird_detection=_build_section(
+            BirdDetectionConfig, raw.get("bird_detection"), "bird_detection", issues
+        ),
+        performance=_build_section(
+            PerformanceConfig, raw.get("performance"), "performance", issues
+        ),
+        outputs=_build_section(OutputsConfig, raw.get("outputs"), "outputs", issues),
+        logging=_build_section(LoggingConfig, raw.get("logging"), "logging", issues),
+        validation_issues=issues,
     )
 
 
@@ -138,8 +164,7 @@ def _positive_int_or_auto(value: int | str) -> bool:
 
 
 def validate_config(cfg: PipelineConfig) -> list[str]:
-    """Return a list of validation errors (empty means valid)."""
-    errors: list[str] = []
+    errors = list(cfg.validation_issues)
     if not cfg.input_dir.exists():
         errors.append(f"input_dir does not exist: {cfg.input_dir}")
     if cfg.qc.min_duration_sec < 0:
@@ -152,8 +177,8 @@ def validate_config(cfg: PipelineConfig) -> list[str]:
         errors.append("vad.backend must be 'onnx' or 'torch'")
     if cfg.diarization.min_embedding_segment_sec <= 0:
         errors.append("diarization.min_embedding_segment_sec must be > 0")
-    if cfg.bird_detection.min_confidence < 0 or cfg.bird_detection.min_confidence > 1:
-        errors.append("bird_detection.min_confidence must be in [0, 1]")
+    if not 0.01 <= cfg.bird_detection.min_confidence <= 0.99:
+        errors.append("bird_detection.min_confidence must be in [0.01, 0.99]")
     if not _positive_int_or_auto(cfg.bird_detection.threads):
         errors.append("bird_detection.threads must be 'auto' or an integer >= 1")
     if cfg.bird_detection.batch_size < 1:

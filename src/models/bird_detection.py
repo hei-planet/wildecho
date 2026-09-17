@@ -66,7 +66,6 @@ def _silence_stdio():
 
 
 def _rebuild_interpreter(analyzer, threads: int) -> None:
-    """Replace birdnetlib's hardcoded one-thread interpreter."""
     if threads <= 1:
         return
     interpreter_cls = analyzer.interpreter.__class__
@@ -83,7 +82,11 @@ def _rebuild_interpreter(analyzer, threads: int) -> None:
 def _get_analyzer(threads: int | None = None):
     from birdnetlib.analyzer import Analyzer
 
-    resolved_threads = int(threads or os.environ.get("WILDECHO_BIRDNET_THREADS") or os.environ.get("AUDIOMOTH_BIRDNET_THREADS", "1"))
+    resolved_threads = int(
+        threads
+        or os.environ.get("WILDECHO_BIRDNET_THREADS")
+        or os.environ.get("AUDIOMOTH_BIRDNET_THREADS", "1")
+    )
     with _silence_stdio():
         analyzer = Analyzer()
         _rebuild_interpreter(analyzer, resolved_threads)
@@ -138,7 +141,7 @@ def _ensure_batch_shape(analyzer, batch_size: int, window_samples: int) -> None:
 def _allowed_species(analyzer, cfg: BirdDetectionConfig) -> set[str] | None:
     if cfg.latitude is None or cfg.longitude is None:
         return None
-    key = f"audiomoth-{cfg.longitude}-{cfg.latitude}-{_LOCATION_FILTER_THRESHOLD}"
+    key = f"wildecho-{cfg.longitude}-{cfg.latitude}-{_LOCATION_FILTER_THRESHOLD}"
     if key not in analyzer.cached_species_lists:
         with _silence_stdio():
             analyzer.cached_species_lists[key] = analyzer.return_predicted_species_list(
@@ -197,6 +200,7 @@ def _infer_detections(
             indexes = np.flatnonzero(scores >= threshold)
             indexes = indexes[np.argsort(scores[indexes])[::-1]]
             start_sec = start_sample / audio.sample_rate
+            end_sec = min(start_sec + _BIRDNET_WINDOW_SEC, audio.duration_sec)
             for index in indexes:
                 label = labels[int(index)]
                 if allowed is not None and label not in allowed:
@@ -208,7 +212,7 @@ def _infer_detections(
                         common_name=common_name,
                         confidence=float(scores[index]),
                         start_sec=float(start_sec),
-                        end_sec=float(start_sec + _BIRDNET_WINDOW_SEC),
+                        end_sec=float(end_sec),
                     )
                 )
     return detections
@@ -222,6 +226,8 @@ def run_bird_detection(audio: AudioData, cfg: BirdDetectionConfig) -> BirdDetect
         )
     if cfg.batch_size < 1:
         raise ValueError("bird_detection.batch_size must be >= 1")
+    if not 0.01 <= cfg.min_confidence <= 0.99:
+        raise ValueError("bird_detection.min_confidence must be in [0.01, 0.99]")
 
     threads = cfg.threads if isinstance(cfg.threads, int) else None
     analyzer = _get_analyzer(threads)
@@ -230,7 +236,7 @@ def run_bird_detection(audio: AudioData, cfg: BirdDetectionConfig) -> BirdDetect
         samples = np.ascontiguousarray(samples.mean(axis=1), dtype=np.float32)
 
     allowed = _allowed_species(analyzer, cfg)
-    threshold = max(0.01, min(float(cfg.min_confidence), 0.99))
+    threshold = float(cfg.min_confidence)
     labels = list(analyzer.labels)
 
     try:

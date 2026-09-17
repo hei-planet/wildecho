@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.6.0 — 2026-09-17
+
+### Reliability
+
+- Replaced substring-based non-bird filtering with exact normalized BirdNET label matching to avoid accidentally rejecting legitimate bird names.
+- Clamped final BirdNET detection timestamps to the real recording duration when the last inference window is zero-padded.
+- Made BirdNET confidence validation consistent with inference: supported values are now `0.01` through `0.99` and invalid values fail instead of being silently changed.
+- Added strict YAML key validation so misspelled configuration options are reported instead of silently ignored.
+- Applied the same configuration validation to `wildecho run-file` as `wildecho run`.
+
+### Developer experience
+
+- Added GitHub Actions CI for Ruff and Pytest on Python 3.12 and 3.13.
+- Added regression tests for exact bird filtering, strict configuration validation, confidence limits, and final-window timestamps.
+
 ## 0.5.0 — WildEcho
 
 - Renamed the public project from AudioMoth Pipeline to WildEcho.
