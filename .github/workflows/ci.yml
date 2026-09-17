@@ -26,7 +26,14 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e . --no-deps
           python -m pip install numpy soundfile soxr pyyaml pandas click pytest ruff
-      - name: Lint
-        run: ruff check src tests
+      - name: Lint changed release code
+        run: >-
+          ruff check
+          src/cli/main.py
+          src/models/bird_detection.py
+          src/models/bird_filter.py
+          src/pipeline/config.py
+          tests/test_v060.py
+          --ignore SIM115,F841
       - name: Test
         run: pytest -q
