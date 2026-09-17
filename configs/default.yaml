@@ -1,4 +1,4 @@
-# WildEcho v0.5.0 — optimized defaults
+# WildEcho v0.7.0 — research defaults for the current AudioMoth deployment
 
 input_dir: "data/"
 output_dir: "outputs/"
@@ -34,10 +34,13 @@ diarization:
 bird_detection:
   enabled: true
   sample_rate: 48000
-  min_confidence: 0.25
-  overlap_sec: 0.0
-  latitude: null
-  longitude: null
+  min_confidence: 0.25        # permissive raw-candidate threshold; calibrate per species later
+  sensitivity: 1.0           # keep fixed across the full dataset
+  overlap_sec: 2.0           # 3 s BirdNET windows with a 1 s step
+  latitude: 49.4085557730695
+  longitude: 8.661985343840124
+  week_48: auto              # infer BirdNET's 1-48 seasonal bin from names like 20260315_092000.WAV
+  species_frequency_threshold: 0.03
   threads: auto              # removes birdnetlib's hardcoded one-thread limit
   batch_size: 8              # 8 windows per TFLite call instead of one
 
@@ -45,7 +48,7 @@ performance:
   file_workers: auto         # conservative CPU/RAM-aware process count
   max_file_workers: 4
   resampler: soxr_hq         # direct libsoxr; much faster than the old librosa path
-  resume: false              # true reuses matching v0.4 JSON results
+  resume: false              # set true to reuse results with an identical analysis fingerprint
 
 outputs:
   per_file_json: true
