@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.7.0 — 2026-09-17
+
+### BirdNET ecology settings
+
+- Added configurable BirdNET sensitivity and fixed the research default at `1.0`.
+- Changed the default overlap to `2.0` seconds, producing 1-second steps between 3-second BirdNET windows.
+- Added the current deployment coordinates: latitude `49.4085557730695`, longitude `8.661985343840124`.
+- Added automatic BirdNET 48-week seasonal filtering from AudioMoth filenames such as `20260315_092000.WAV`.
+- Added configurable species-frequency filtering with a default of `0.03`.
+- Kept the raw BirdNET candidate threshold at `0.25` for later species-specific calibration.
+
+### Reproducibility
+
+- BirdNET outputs now record whether the location filter was applied, the resolved 48-week bin, candidate-species count, coordinates, sensitivity, overlap, and species-frequency threshold.
+- Added validation for coordinates, sensitivity, week selection, and species-frequency threshold.
+- Added regression tests confirming `20260315_092000.WAV` resolves to BirdNET week 10.
+
 ## 0.6.0 — 2026-09-17
 
 ### Reliability
