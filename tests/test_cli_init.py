@@ -1,5 +1,7 @@
 """CLI behavior for the interactive WildEcho initializer."""
 
+import click
+import pytest
 from click.testing import CliRunner
 
 import cli.main as cli_main
@@ -73,7 +75,7 @@ def test_default_config_falls_back_when_saved_config_is_missing(monkeypatch, tmp
 
 
 
-def test_run_pipeline_safely_hides_dependency_traceback(monkeypatch) -> None:
+def test_run_pipeline_safely_hides_dependency_traceback(monkeypatch, capsys) -> None:
     import pipeline.runner
 
     def fail(_cfg) -> None:
@@ -81,10 +83,10 @@ def test_run_pipeline_safely_hides_dependency_traceback(monkeypatch) -> None:
 
     monkeypatch.setattr(pipeline.runner, "run_pipeline", fail)
 
-    runner = CliRunner()
-    with runner.isolated_filesystem():
-        result = runner.invoke(cli_main.main, ["run", "--config", "missing.yaml"])
+    with pytest.raises(click.exceptions.Exit):
+        cli_main._run_pipeline_safely(object())
 
-    # Click validates the path before pipeline startup, so exercise the helper directly instead.
-    if result.exit_code == 0:
-        raise AssertionError("Expected config path validation to fail")
+    captured = capsys.readouterr()
+    assert "Startup failed" in captured.err
+    assert "missing dependency" in captured.err
+    assert "Traceback" not in captured.err
