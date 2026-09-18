@@ -12,6 +12,7 @@ import pandas as pd
 from models.bird_detection import BirdDetection, BirdDetectionResult
 from models.bird_filter import is_bird_detection
 from models.diarization import DiarizationResult, SpeakerSegment
+from models.perch_detection import PerchDetectionResult
 from models.vad import VADResult
 from pipeline.config import OutputsConfig  # noqa: F401  (re-exported for tests)
 from preprocessing.qc import QCResult
@@ -88,6 +89,7 @@ def build_file_record(
     diarization: DiarizationResult | None,
     birds: BirdDetectionResult | None,
     outputs_cfg: OutputsConfig | None = None,
+    perch: PerchDetectionResult | None = None,
 ) -> dict:
     """Assemble one complete, JSON-serializable file result."""
     if outputs_cfg is None:
@@ -219,6 +221,44 @@ def build_file_record(
             record["bird_species_list"] = []
         record["bird_detections"] = []
 
+    if perch is not None:
+        record["perch_location_filter_applied"] = perch.location_filter_applied
+        record["perch_week_48"] = perch.week_48
+        record["perch_candidate_species_count"] = perch.candidate_species_count
+        record["perch_model_species_count"] = perch.model_species_count
+        record["perch_location_candidate_coverage"] = perch.location_candidate_coverage
+        record["perch_score_transform"] = perch.score_transform
+        record["perch_overlap_sec"] = perch.overlap_sec
+        record["perch_top_k"] = perch.top_k
+        record["perch_device"] = perch.device
+        record["num_perch_species"] = perch.num_species
+        record["perch_species_list"] = list(perch.species_list)
+        record["perch_detections"] = [
+            {
+                **asdict(detection),
+                **_bird_human_overlap(
+                    detection,
+                    speech_intervals,
+                    speaker_segments,
+                    overlap_source,
+                ),
+            }
+            for detection in perch.detections
+        ]
+    else:
+        record["perch_location_filter_applied"] = None
+        record["perch_week_48"] = None
+        record["perch_candidate_species_count"] = None
+        record["perch_model_species_count"] = None
+        record["perch_location_candidate_coverage"] = None
+        record["perch_score_transform"] = None
+        record["perch_overlap_sec"] = None
+        record["perch_top_k"] = None
+        record["perch_device"] = None
+        record["num_perch_species"] = None
+        record["perch_species_list"] = []
+        record["perch_detections"] = []
+
     return record
 
 
@@ -241,6 +281,8 @@ def _flatten_summary_record(record: dict) -> dict:
         "bird_species_list",
         "human_speech_segments",
         "speakers",
+        "perch_detections",
+        "perch_species_list",
     }
     flat = {key: value for key, value in record.items() if key not in skip_keys}
     timings = flat.pop("processing_times_sec", {}) or {}
@@ -321,6 +363,8 @@ def save_readable_csvs(records: list[dict], output_dir: Path) -> dict[str, Path]
     paths = {
         "recordings": output_dir / "recordings.csv",
         "birds": output_dir / "bird_detections.csv",
+        "perch": output_dir / "perch_detections.csv",
+        "comparison": output_dir / "bird_model_comparison.csv",
         "speech": output_dir / "speech_segments.csv",
     }
 
@@ -330,6 +374,8 @@ def save_readable_csvs(records: list[dict], output_dir: Path) -> dict[str, Path]
     )
 
     bird_rows: list[dict] = []
+    perch_rows: list[dict] = []
+    comparison_rows: list[dict] = []
     speech_rows: list[dict] = []
     for record in records:
         file_name = record.get("file_name")
@@ -358,6 +404,65 @@ def save_readable_csvs(records: list[dict], output_dir: Path) -> dict[str, Path]
                     ),
                 }
             )
+        for detection in record.get("perch_detections") or []:
+            perch_rows.append(
+                {
+                    "Recording": file_name,
+                    "Start (seconds)": detection.get("start_sec"),
+                    "End (seconds)": detection.get("end_sec"),
+                    "Scientific name": detection.get("species"),
+                    "Common name": detection.get("common_name"),
+                    "Perch score": detection.get("confidence"),
+                    "Score transform": record.get("perch_score_transform"),
+                    "Overlaps human speech": _yes_no(
+                        detection.get("overlaps_human_speech")
+                    ),
+                    "Speech overlap (seconds)": detection.get("human_overlap_sec"),
+                    "Speech overlap percentage": (
+                        round(float(detection.get("human_overlap_ratio") or 0.0) * 100.0, 3)
+                    ),
+                }
+            )
+
+        bird_by_species: dict[str, list[dict]] = {}
+        for detection in record.get("bird_detections") or []:
+            bird_by_species.setdefault(str(detection.get("species")), []).append(detection)
+        perch_by_species: dict[str, list[dict]] = {}
+        for detection in record.get("perch_detections") or []:
+            perch_by_species.setdefault(str(detection.get("species")), []).append(detection)
+
+        for species in sorted(set(bird_by_species) | set(perch_by_species)):
+            bird_items = bird_by_species.get(species, [])
+            perch_items = perch_by_species.get(species, [])
+            sample = (bird_items or perch_items)[0]
+            if bird_items and perch_items:
+                agreement = "Both"
+            elif bird_items:
+                agreement = "BirdNET only"
+            else:
+                agreement = "Perch only"
+            comparison_rows.append(
+                {
+                    "Recording": file_name,
+                    "Scientific name": species,
+                    "Common name": sample.get("common_name"),
+                    "Agreement": agreement,
+                    "BirdNET detections": len(bird_items),
+                    "BirdNET max score": (
+                        max(float(item.get("confidence", 0.0)) for item in bird_items)
+                        if bird_items
+                        else None
+                    ),
+                    "Perch detections": len(perch_items),
+                    "Perch max score": (
+                        max(float(item.get("confidence", 0.0)) for item in perch_items)
+                        if perch_items
+                        else None
+                    ),
+                    "Perch score transform": record.get("perch_score_transform"),
+                }
+            )
+
         for segment in record.get("human_speech_segments") or []:
             speech_rows.append(
                 {
@@ -388,6 +493,35 @@ def save_readable_csvs(records: list[dict], output_dir: Path) -> dict[str, Path]
             "Overlapping speakers",
         ],
     ).to_csv(paths["birds"], index=False)
+    pd.DataFrame(
+        perch_rows,
+        columns=[
+            "Recording",
+            "Start (seconds)",
+            "End (seconds)",
+            "Scientific name",
+            "Common name",
+            "Perch score",
+            "Score transform",
+            "Overlaps human speech",
+            "Speech overlap (seconds)",
+            "Speech overlap percentage",
+        ],
+    ).to_csv(paths["perch"], index=False)
+    pd.DataFrame(
+        comparison_rows,
+        columns=[
+            "Recording",
+            "Scientific name",
+            "Common name",
+            "Agreement",
+            "BirdNET detections",
+            "BirdNET max score",
+            "Perch detections",
+            "Perch max score",
+            "Perch score transform",
+        ],
+    ).to_csv(paths["comparison"], index=False)
     pd.DataFrame(
         speech_rows,
         columns=[
