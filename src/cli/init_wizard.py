@@ -184,7 +184,8 @@ def _configure_location(questionary, cfg: dict[str, Any]) -> None:
         cfg["perch_detection"]["use_birdnet_location_filter"] = False
         return
 
-    use_geo = _confirm(questionary, 
+    use_geo = _confirm(
+        questionary,
         "Use location + season filtering?",
         default=True,
     ).ask()
@@ -207,7 +208,8 @@ def _configure_location(questionary, cfg: dict[str, Any]) -> None:
     cfg["bird_detection"]["week_48"] = "auto"
 
     if cfg["perch_detection"]["enabled"]:
-        cfg["perch_detection"]["use_birdnet_location_filter"] = _confirm(questionary, 
+        cfg["perch_detection"]["use_birdnet_location_filter"] = _confirm(
+        questionary,
             "Apply the same BirdNET location/season candidate list to Perch?",
             default=True,
         ).ask()
@@ -215,7 +217,8 @@ def _configure_location(questionary, cfg: dict[str, Any]) -> None:
 
 def _configure_advanced(questionary, cfg: dict[str, Any]) -> None:
     if cfg["vad"]["enabled"]:
-        cfg["vad"]["backend"] = _select(questionary, 
+        cfg["vad"]["backend"] = _select(
+            questionary,
             "Silero VAD backend:",
             choices=["onnx", "torch"],
             default=cfg["vad"]["backend"],
@@ -266,13 +269,15 @@ def _configure_advanced(questionary, cfg: dict[str, Any]) -> None:
         cfg["perch_detection"]["top_k"] = _ask_int(
             questionary, "Perch top-k predictions:", cfg["perch_detection"]["top_k"]
         )
-        cfg["perch_detection"]["device"] = _select(questionary, 
+        cfg["perch_detection"]["device"] = _select(
+            questionary,
             "Perch device:",
             choices=["CPU", "GPU"],
             default=cfg["perch_detection"]["device"],
         ).ask()
 
-    output_choices = _checkbox(questionary, 
+    output_choices = _checkbox(
+            questionary,
         "Select outputs:",
         choices=[
             questionary.Choice("Per-file JSON", value="per_file_json", checked=True),
@@ -300,12 +305,14 @@ def _configure_advanced(questionary, cfg: dict[str, Any]) -> None:
     ):
         cfg["outputs"][key] = key in selected_outputs
 
-    cfg["performance"]["resampler"] = _select(questionary, 
+    cfg["performance"]["resampler"] = _select(
+            questionary,
         "Resampler:",
         choices=["soxr_hq", "soxr_mq", "soxr_lq"],
         default=cfg["performance"]["resampler"],
     ).ask()
-    cfg["performance"]["resume"] = _confirm(questionary, 
+    cfg["performance"]["resume"] = _confirm(
+        questionary,
         "Reuse matching existing results?",
         default=cfg["performance"]["resume"],
     ).ask()
@@ -359,7 +366,8 @@ def run_init_wizard(
     if input_dir is None or output_dir is None:
         raise KeyboardInterrupt
 
-    preset = _select(questionary, 
+    preset = _select(
+        questionary,
         "Choose a pipeline:",
         choices=[
             questionary.Choice(
@@ -376,7 +384,8 @@ def run_init_wizard(
         raise KeyboardInterrupt
 
     if preset == "custom":
-        selected = _checkbox(questionary, 
+        selected = _checkbox(
+            questionary,
             "Select pipeline stages:",
             choices=[
                 questionary.Choice("Silero VAD — human speech", value="vad"),
@@ -395,7 +404,8 @@ def run_init_wizard(
 
     cfg = build_config(stages=stages, input_dir=input_dir, output_dir=output_dir)
 
-    detail = _select(questionary, 
+    detail = _select(
+        questionary,
         "Configuration:",
         choices=[
             questionary.Choice("Recommended — tested defaults", value="recommended"),
@@ -421,7 +431,8 @@ def run_init_wizard(
         config_path = Path(selected_path)
 
     if config_path.exists() and not force:
-        overwrite = _confirm(questionary, 
+        overwrite = _confirm(
+            questionary,
             f"{config_path} already exists. Overwrite it?",
             default=False,
         ).ask()
