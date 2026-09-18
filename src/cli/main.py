@@ -18,6 +18,30 @@ def main() -> None:
     load_dotenv(".env")
 
 
+@main.command(name="init")
+@click.option(
+    "--config",
+    "-c",
+    "config_path",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Where to write the generated YAML config.",
+)
+@click.option("--force", is_flag=True, help="Overwrite an existing config file.")
+def init_config(config_path: Path | None, force: bool) -> None:
+    """Interactively build a WildEcho pipeline configuration."""
+    from cli.init_wizard import run_init_wizard
+
+    try:
+        run_init_wizard(config_path=config_path, force=force)
+    except KeyboardInterrupt as exc:
+        click.echo("\nSetup cancelled.", err=True)
+        raise click.exceptions.Exit(1) from exc
+    except (FileExistsError, RuntimeError, ValueError) as exc:
+        click.echo(f"Setup error: {exc}", err=True)
+        raise click.exceptions.Exit(1) from exc
+
+
 def _validated_config(path: Path):
     """Load a config and exit with readable errors when it is invalid."""
     try:
