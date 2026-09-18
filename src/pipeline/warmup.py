@@ -97,7 +97,12 @@ def warmup(cfg: PipelineConfig, *, report: bool = True) -> None:
     if cfg.bird_detection.enabled:
         def _load_birdnet() -> None:
             from models.bird_detection import _get_analyzer
-            _get_analyzer(cfg.bird_detection.threads if isinstance(cfg.bird_detection.threads, int) else None)
+            threads = (
+                cfg.bird_detection.threads
+                if isinstance(cfg.bird_detection.threads, int)
+                else None
+            )
+            _get_analyzer(threads)
         _step("BirdNET analyzer", _load_birdnet, report=report)
 
     if cfg.perch_detection.enabled:
