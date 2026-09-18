@@ -523,7 +523,7 @@ def run_init_wizard(
     print(f"  Pipeline: {_stage_summary(cfg)}")
     print()
     print("  This is now the default config for `wildecho run`.")
-    print(f"  Run: wildecho run")
+    print("  Run: wildecho run")
     print()
 
     return config_path
