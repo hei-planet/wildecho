@@ -128,12 +128,10 @@ def _build_section(cls: type, raw: dict | None, name: str, issues: list[str]):
     return cls(**{key: value for key, value in raw.items() if key in known})
 
 
-def load_config(path: Path) -> PipelineConfig:
-    logger.info("Loading config from %s", path)
-    with open(path) as fh:
-        raw = yaml.safe_load(fh) or {}
+def config_from_mapping(raw: dict) -> PipelineConfig:
+    """Build a typed pipeline config from an in-memory YAML-style mapping."""
     if not isinstance(raw, dict):
-        raise ValueError("Top-level YAML config must be a mapping/object")
+        raise ValueError("Top-level config must be a mapping/object")
 
     issues: list[str] = []
     top_level = {
@@ -176,6 +174,15 @@ def load_config(path: Path) -> PipelineConfig:
         logging=_build_section(LoggingConfig, raw.get("logging"), "logging", issues),
         validation_issues=issues,
     )
+
+
+def load_config(path: Path) -> PipelineConfig:
+    logger.info("Loading config from %s", path)
+    with open(path) as fh:
+        raw = yaml.safe_load(fh) or {}
+    if not isinstance(raw, dict):
+        raise ValueError("Top-level YAML config must be a mapping/object")
+    return config_from_mapping(raw)
 
 
 def _positive_int_or_auto(value: int | str) -> bool:
