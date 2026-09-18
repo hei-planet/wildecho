@@ -209,7 +209,7 @@ def _configure_location(questionary, cfg: dict[str, Any]) -> None:
 
     if cfg["perch_detection"]["enabled"]:
         cfg["perch_detection"]["use_birdnet_location_filter"] = _confirm(
-        questionary,
+            questionary,
             "Apply the same BirdNET location/season candidate list to Perch?",
             default=True,
         ).ask()
@@ -277,7 +277,7 @@ def _configure_advanced(questionary, cfg: dict[str, Any]) -> None:
         ).ask()
 
     output_choices = _checkbox(
-            questionary,
+        questionary,
         "Select outputs:",
         choices=[
             questionary.Choice("Per-file JSON", value="per_file_json", checked=True),
@@ -306,7 +306,7 @@ def _configure_advanced(questionary, cfg: dict[str, Any]) -> None:
         cfg["outputs"][key] = key in selected_outputs
 
     cfg["performance"]["resampler"] = _select(
-            questionary,
+        questionary,
         "Resampler:",
         choices=["soxr_hq", "soxr_mq", "soxr_lq"],
         default=cfg["performance"]["resampler"],
