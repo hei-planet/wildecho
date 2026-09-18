@@ -8,6 +8,44 @@ from typing import Any
 
 import yaml
 
+_STYLE_RULES = [
+    ("qmark", "fg:ansicyan bold"),
+    ("question", "bold"),
+    ("answer", "fg:ansicyan bold"),
+    ("pointer", "fg:ansicyan bold"),
+    ("highlighted", "fg:ansicyan bold"),
+    ("selected", "fg:ansigreen"),
+    ("separator", "fg:ansibrightblack"),
+    ("instruction", "fg:ansibrightblack"),
+    ("text", ""),
+    ("disabled", "fg:ansibrightblack italic"),
+]
+
+
+def _wizard_style(questionary):
+    return questionary.Style(_STYLE_RULES)
+
+
+def _text(questionary, *args, **kwargs):
+    kwargs.setdefault("style", _wizard_style(questionary))
+    return questionary.text(*args, **kwargs)
+
+
+def _select(questionary, *args, **kwargs):
+    kwargs.setdefault("style", _wizard_style(questionary))
+    return questionary.select(*args, **kwargs)
+
+
+def _confirm(questionary, *args, **kwargs):
+    kwargs.setdefault("style", _wizard_style(questionary))
+    return questionary.confirm(*args, **kwargs)
+
+
+def _checkbox(questionary, *args, **kwargs):
+    kwargs.setdefault("style", _wizard_style(questionary))
+    return questionary.checkbox(*args, **kwargs)
+
+
 PRESETS: dict[str, set[str]] = {
     "standard": {"vad", "diarization", "birdnet"},
     "birds": {"birdnet"},
@@ -121,7 +159,7 @@ def build_config(
 
 
 def _ask_float(questionary, message: str, default: float) -> float:
-    value = questionary.text(message, default=str(default)).ask()
+    value = _text(questionary, message, default=str(default)).ask()
     if value is None:
         raise KeyboardInterrupt
     try:
@@ -132,7 +170,7 @@ def _ask_float(questionary, message: str, default: float) -> float:
 
 
 def _ask_int(questionary, message: str, default: int) -> int:
-    value = questionary.text(message, default=str(default)).ask()
+    value = _text(questionary, message, default=str(default)).ask()
     if value is None:
         raise KeyboardInterrupt
     try:
@@ -146,7 +184,7 @@ def _configure_location(questionary, cfg: dict[str, Any]) -> None:
         cfg["perch_detection"]["use_birdnet_location_filter"] = False
         return
 
-    use_geo = questionary.confirm(
+    use_geo = _confirm(questionary, 
         "Use location + season filtering?",
         default=True,
     ).ask()
@@ -156,8 +194,8 @@ def _configure_location(questionary, cfg: dict[str, Any]) -> None:
         cfg["perch_detection"]["use_birdnet_location_filter"] = False
         return
 
-    latitude = questionary.text("Latitude:").ask()
-    longitude = questionary.text("Longitude:").ask()
+    latitude = _text(questionary, "Latitude:").ask()
+    longitude = _text(questionary, "Longitude:").ask()
     if not latitude or not longitude:
         cfg["bird_detection"]["latitude"] = None
         cfg["bird_detection"]["longitude"] = None
@@ -169,7 +207,7 @@ def _configure_location(questionary, cfg: dict[str, Any]) -> None:
     cfg["bird_detection"]["week_48"] = "auto"
 
     if cfg["perch_detection"]["enabled"]:
-        cfg["perch_detection"]["use_birdnet_location_filter"] = questionary.confirm(
+        cfg["perch_detection"]["use_birdnet_location_filter"] = _confirm(questionary, 
             "Apply the same BirdNET location/season candidate list to Perch?",
             default=True,
         ).ask()
@@ -177,7 +215,7 @@ def _configure_location(questionary, cfg: dict[str, Any]) -> None:
 
 def _configure_advanced(questionary, cfg: dict[str, Any]) -> None:
     if cfg["vad"]["enabled"]:
-        cfg["vad"]["backend"] = questionary.select(
+        cfg["vad"]["backend"] = _select(questionary, 
             "Silero VAD backend:",
             choices=["onnx", "torch"],
             default=cfg["vad"]["backend"],
@@ -228,13 +266,13 @@ def _configure_advanced(questionary, cfg: dict[str, Any]) -> None:
         cfg["perch_detection"]["top_k"] = _ask_int(
             questionary, "Perch top-k predictions:", cfg["perch_detection"]["top_k"]
         )
-        cfg["perch_detection"]["device"] = questionary.select(
+        cfg["perch_detection"]["device"] = _select(questionary, 
             "Perch device:",
             choices=["CPU", "GPU"],
             default=cfg["perch_detection"]["device"],
         ).ask()
 
-    output_choices = questionary.checkbox(
+    output_choices = _checkbox(questionary, 
         "Select outputs:",
         choices=[
             questionary.Choice("Per-file JSON", value="per_file_json", checked=True),
@@ -262,12 +300,12 @@ def _configure_advanced(questionary, cfg: dict[str, Any]) -> None:
     ):
         cfg["outputs"][key] = key in selected_outputs
 
-    cfg["performance"]["resampler"] = questionary.select(
+    cfg["performance"]["resampler"] = _select(questionary, 
         "Resampler:",
         choices=["soxr_hq", "soxr_mq", "soxr_lq"],
         default=cfg["performance"]["resampler"],
     ).ask()
-    cfg["performance"]["resume"] = questionary.confirm(
+    cfg["performance"]["resume"] = _confirm(questionary, 
         "Reuse matching existing results?",
         default=cfg["performance"]["resume"],
     ).ask()
@@ -316,12 +354,12 @@ def run_init_wizard(
     print("  Build your acoustic pipeline")
     print()
 
-    input_dir = questionary.text("Audio input directory:", default="data/").ask()
-    output_dir = questionary.text("Results directory:", default="outputs/").ask()
+    input_dir = _text(questionary, "Audio input directory:", default="data/").ask()
+    output_dir = _text(questionary, "Results directory:", default="outputs/").ask()
     if input_dir is None or output_dir is None:
         raise KeyboardInterrupt
 
-    preset = questionary.select(
+    preset = _select(questionary, 
         "Choose a pipeline:",
         choices=[
             questionary.Choice(
@@ -338,7 +376,7 @@ def run_init_wizard(
         raise KeyboardInterrupt
 
     if preset == "custom":
-        selected = questionary.checkbox(
+        selected = _checkbox(questionary, 
             "Select pipeline stages:",
             choices=[
                 questionary.Choice("Silero VAD — human speech", value="vad"),
@@ -357,7 +395,7 @@ def run_init_wizard(
 
     cfg = build_config(stages=stages, input_dir=input_dir, output_dir=output_dir)
 
-    detail = questionary.select(
+    detail = _select(questionary, 
         "Configuration:",
         choices=[
             questionary.Choice("Recommended — tested defaults", value="recommended"),
@@ -377,13 +415,13 @@ def run_init_wizard(
             if cfg["perch_detection"]["enabled"]
             else "configs/wildecho.yaml"
         )
-        selected_path = questionary.text("Save config as:", default=default_name).ask()
+        selected_path = _text(questionary, "Save config as:", default=default_name).ask()
         if selected_path is None:
             raise KeyboardInterrupt
         config_path = Path(selected_path)
 
     if config_path.exists() and not force:
-        overwrite = questionary.confirm(
+        overwrite = _confirm(questionary, 
             f"{config_path} already exists. Overwrite it?",
             default=False,
         ).ask()
