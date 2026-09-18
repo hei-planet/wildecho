@@ -11,11 +11,28 @@ from pipeline.config import load_config, validate_config
 from pipeline.utils import load_dotenv
 
 
-@click.group()
+def _launch_init(config_path: Path | None = None, force: bool = False) -> None:
+    """Launch the interactive pipeline builder with consistent error handling."""
+    from cli.init_wizard import run_init_wizard
+
+    try:
+        run_init_wizard(config_path=config_path, force=force)
+    except KeyboardInterrupt as exc:
+        click.echo("\nSetup cancelled.", err=True)
+        raise click.exceptions.Exit(1) from exc
+    except (FileExistsError, RuntimeError, ValueError) as exc:
+        click.echo(f"Setup error: {exc}", err=True)
+        raise click.exceptions.Exit(1) from exc
+
+
+@click.group(invoke_without_command=True, no_args_is_help=False)
 @click.version_option(package_name="wildecho")
-def main() -> None:
-    """WildEcho — speech detection, speaker estimation, and bird detection."""
+@click.pass_context
+def main(ctx: click.Context) -> None:
+    """WildEcho — build and run acoustic analysis pipelines."""
     load_dotenv(".env")
+    if ctx.invoked_subcommand is None:
+        _launch_init()
 
 
 @main.command(name="init")
@@ -30,16 +47,7 @@ def main() -> None:
 @click.option("--force", is_flag=True, help="Overwrite an existing config file.")
 def init_config(config_path: Path | None, force: bool) -> None:
     """Interactively build a WildEcho pipeline configuration."""
-    from cli.init_wizard import run_init_wizard
-
-    try:
-        run_init_wizard(config_path=config_path, force=force)
-    except KeyboardInterrupt as exc:
-        click.echo("\nSetup cancelled.", err=True)
-        raise click.exceptions.Exit(1) from exc
-    except (FileExistsError, RuntimeError, ValueError) as exc:
-        click.echo(f"Setup error: {exc}", err=True)
-        raise click.exceptions.Exit(1) from exc
+    _launch_init(config_path=config_path, force=force)
 
 
 def _validated_config(path: Path):
