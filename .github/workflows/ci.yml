@@ -32,9 +32,11 @@ jobs:
           src/cli/main.py
           src/models/bird_detection.py
           src/models/bird_filter.py
+          src/models/perch_detection.py
           src/pipeline/config.py
           tests/test_v060.py
           tests/test_v070.py
+          tests/test_perch_experiment.py
           --ignore SIM115,F841
       - name: Test
         run: pytest -q
