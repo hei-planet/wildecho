@@ -35,9 +35,12 @@ jobs:
           src/models/bird_filter.py
           src/models/perch_detection.py
           src/pipeline/config.py
+          src/pipeline/runner.py
+          src/pipeline/warmup.py
           tests/test_v060.py
           tests/test_v070.py
           tests/test_perch_experiment.py
+          tests/test_cli_init.py
           --ignore SIM115,F841
       - name: Test
         run: pytest -q
