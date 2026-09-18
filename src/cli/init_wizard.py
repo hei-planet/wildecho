@@ -414,6 +414,12 @@ def _write_config(path: Path, cfg: dict[str, Any], *, force: bool = False) -> No
     )
 
 
+def _remember_config(path: Path) -> None:
+    state_dir = Path(".wildecho")
+    state_dir.mkdir(parents=True, exist_ok=True)
+    state_dir.joinpath("last-config").write_text(str(path), encoding="utf-8")
+
+
 def run_init_wizard(
     *,
     config_path: Path | None = None,
@@ -510,14 +516,14 @@ def run_init_wizard(
         force = True
 
     _write_config(config_path, cfg, force=force)
+    _remember_config(config_path)
 
     print()
     print(f"  ✓ Config created: {config_path}")
     print(f"  Pipeline: {_stage_summary(cfg)}")
-    if cfg["perch_detection"]["enabled"]:
-        print("  Perch: install with `uv pip install -r requirements-perch.txt`")
     print()
-    print(f"  Run: uv run wildecho run -c {config_path}")
+    print("  This is now the default config for `wildecho run`.")
+    print(f"  Run: wildecho run")
     print()
 
     return config_path
