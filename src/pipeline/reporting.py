@@ -68,10 +68,11 @@ def _sum_timings(timings: dict[str, float], names: tuple[str, ...]) -> float:
 
 def compact_stage_text(record: dict) -> str:
     timings = record.get("processing_times_sec") or {}
-    return "  ".join(
-        f"{label} {_sum_timings(timings, names):5.2f}s"
-        for label, names in _STAGE_GROUPS
-    )
+    parts = []
+    for label, names in _STAGE_GROUPS:
+        if any(name in timings for name in names):
+            parts.append(f"{label} {_sum_timings(timings, names):5.2f}s")
+    return "  ".join(parts)
 
 
 @dataclass
@@ -109,17 +110,28 @@ class RunReporter:
         memory = "unknown" if runtime.memory_gib is None else f"{runtime.memory_gib:.1f} GiB free"
         title = styled(f"WildEcho v{version}", fg="cyan", bold=True)
         line = "─" * 94
+        performance_parts = [f"{runtime.file_workers} worker(s)"]
+        if cfg.bird_detection.enabled:
+            performance_parts.append(
+                f"BirdNET {runtime.birdnet_threads} thread(s)/worker"
+            )
+        if cfg.perch_detection.enabled:
+            performance_parts.append(f"Perch {cfg.perch_detection.device}")
+        performance_parts.extend(
+            [
+                cfg.performance.resampler,
+                f"{runtime.cpu_count} CPUs",
+                memory,
+            ]
+        )
+
         return [
             styled(f"╭─ {title} " + "─" * max(1, 68 - len(version)), fg="cyan"),
             f"│ Input       {cfg.input_dir / cfg.file_glob}",
             f"│ Output      {cfg.output_dir}",
             f"│ Files       {self.total_files:,}",
             f"│ Stages      {', '.join(stages) if stages else '(none)'}",
-            (
-                f"│ Performance {runtime.file_workers} worker(s), "
-                f"BirdNET {runtime.birdnet_threads} thread(s)/worker, "
-                f"{cfg.performance.resampler}, {runtime.cpu_count} CPUs, {memory}"
-            ),
+            f"│ Performance {', '.join(performance_parts)}",
             styled("╰" + line[1:], fg="cyan"),
         ]
 
