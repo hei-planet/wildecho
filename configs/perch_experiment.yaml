@@ -1,0 +1,75 @@
+# Experiment A — BirdNET V2.4 vs Perch v2
+# Main branch is untouched. Run this only from experiment/perch-v2.
+
+input_dir: "data/N3"
+output_dir: "outputs/N3-perch-experiment"
+file_glob: "*.WAV"
+
+audio:
+  native_sample_rate: 48000
+
+qc:
+  min_duration_sec: 1.0
+  max_duration_sec: 7200.0
+  check_clipping: true
+  clipping_threshold: 0.99
+
+vad:
+  enabled: true
+  sample_rate: 16000
+  backend: onnx
+  threshold: 0.5
+  min_speech_duration_ms: 250
+  min_silence_duration_ms: 100
+
+diarization:
+  enabled: true
+  backend: diarize
+  sample_rate: 16000
+  min_speakers: 1
+  max_speakers: 10
+  device: cpu
+  min_embedding_segment_sec: 0.4
+  fail_on_error: false
+
+bird_detection:
+  enabled: true
+  sample_rate: 48000
+  min_confidence: 0.25
+  sensitivity: 1.0
+  overlap_sec: 2.0
+  latitude: 49.4085557730695
+  longitude: 8.661985343840124
+  week_48: auto
+  species_frequency_threshold: 0.03
+  threads: auto
+  batch_size: 8
+
+perch_detection:
+  enabled: true
+  sample_rate: 32000
+  min_confidence: 0.05
+  overlap_sec: 4.0          # 5 s windows with a 1 s step, matching BirdNET temporal step
+  top_k: 5
+  device: CPU
+  batch_size: 8
+  apply_softmax: true       # keep this score separate from BirdNET confidence
+  use_birdnet_location_filter: true
+
+performance:
+  file_workers: 1          # Perch is large; avoid one ~380 MB model copy per worker initially
+  max_file_workers: 1
+  resampler: soxr_hq
+  resume: false
+
+outputs:
+  per_file_json: true
+  summary_csv: true
+  readable_csvs: true
+  save_intermediate: false
+  include_detected_signals: true
+  include_bird_species_list: true
+
+logging:
+  level: INFO
+  log_file: null

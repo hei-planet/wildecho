@@ -1,0 +1,4 @@
+# Experiment A only: Perch v2 requires TensorFlow >=2.20.
+# Install into the existing WildEcho environment with:
+#   uv pip install -r requirements-perch.txt
+birdnet[tf]==1.1.1

@@ -64,14 +64,14 @@ def _quiet_third_party() -> None:
 
 
 def _step(label: str, fn, *, report: bool = True) -> None:
-    """Run a warm-up step and log a tidy '✓ label (Xs)' line on success."""
+    """Run a required warm-up step and stop immediately when it cannot load."""
     t0 = time.perf_counter()
     try:
         with _silence_stdio():
             fn()
     except Exception as exc:  # noqa: BLE001
-        logger.warning("  ✗ %-22s failed: %s", label, exc)
-        return
+        logger.error("  ✗ %-22s failed: %s", label, exc)
+        raise RuntimeError(f"{label} failed to load: {exc}") from exc
     if report:
         logger.info("  ✓ %-22s %6.2fs", label, time.perf_counter() - t0)
 
@@ -97,5 +97,16 @@ def warmup(cfg: PipelineConfig, *, report: bool = True) -> None:
     if cfg.bird_detection.enabled:
         def _load_birdnet() -> None:
             from models.bird_detection import _get_analyzer
-            _get_analyzer(cfg.bird_detection.threads if isinstance(cfg.bird_detection.threads, int) else None)
+            threads = (
+                cfg.bird_detection.threads
+                if isinstance(cfg.bird_detection.threads, int)
+                else None
+            )
+            _get_analyzer(threads)
         _step("BirdNET analyzer", _load_birdnet, report=report)
+
+    if cfg.perch_detection.enabled:
+        def _load_perch() -> None:
+            from models.perch_detection import _get_perch_model
+            _get_perch_model(cfg.perch_detection.device)
+        _step("Perch v2", _load_perch, report=report)

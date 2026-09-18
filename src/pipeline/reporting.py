@@ -18,6 +18,7 @@ _STAGE_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("VAD", ("vad_resample", "vad")),
     ("diar", ("diarization_resample", "diarization")),
     ("BirdNET", ("bird_resample", "bird_detection")),
+    ("Perch", ("perch_resample", "perch_detection")),
     ("output", ("record_build", "json_write")),
 )
 
@@ -31,6 +32,8 @@ _STAGE_DETAILS: tuple[tuple[str, str], ...] = (
     ("diarization", "speaker diarization"),
     ("bird_resample", "BirdNET resample"),
     ("bird_detection", "BirdNET analysis"),
+    ("perch_resample", "Perch resample"),
+    ("perch_detection", "Perch analysis"),
     ("record_build", "result assembly"),
     ("json_write", "JSON write"),
 )
@@ -65,10 +68,11 @@ def _sum_timings(timings: dict[str, float], names: tuple[str, ...]) -> float:
 
 def compact_stage_text(record: dict) -> str:
     timings = record.get("processing_times_sec") or {}
-    return "  ".join(
-        f"{label} {_sum_timings(timings, names):5.2f}s"
-        for label, names in _STAGE_GROUPS
-    )
+    parts = []
+    for label, names in _STAGE_GROUPS:
+        if any(name in timings for name in names):
+            parts.append(f"{label} {_sum_timings(timings, names):5.2f}s")
+    return "  ".join(parts)
 
 
 @dataclass
@@ -98,6 +102,7 @@ class RunReporter:
                 (f"Silero VAD/{cfg.vad.backend.upper()}", cfg.vad.enabled),
                 ("speaker diarization", cfg.diarization.enabled),
                 ("BirdNET", cfg.bird_detection.enabled),
+                ("Perch v2", cfg.perch_detection.enabled),
             )
             if enabled
         ]
@@ -105,17 +110,28 @@ class RunReporter:
         memory = "unknown" if runtime.memory_gib is None else f"{runtime.memory_gib:.1f} GiB free"
         title = styled(f"WildEcho v{version}", fg="cyan", bold=True)
         line = "─" * 94
+        performance_parts = [f"{runtime.file_workers} worker(s)"]
+        if cfg.bird_detection.enabled:
+            performance_parts.append(
+                f"BirdNET {runtime.birdnet_threads} thread(s)/worker"
+            )
+        if cfg.perch_detection.enabled:
+            performance_parts.append(f"Perch {cfg.perch_detection.device}")
+        performance_parts.extend(
+            [
+                cfg.performance.resampler,
+                f"{runtime.cpu_count} CPUs",
+                memory,
+            ]
+        )
+
         return [
             styled(f"╭─ {title} " + "─" * max(1, 68 - len(version)), fg="cyan"),
             f"│ Input       {cfg.input_dir / cfg.file_glob}",
             f"│ Output      {cfg.output_dir}",
             f"│ Files       {self.total_files:,}",
             f"│ Stages      {', '.join(stages) if stages else '(none)'}",
-            (
-                f"│ Performance {runtime.file_workers} worker(s), "
-                f"BirdNET {runtime.birdnet_threads} thread(s)/worker, "
-                f"{cfg.performance.resampler}, {runtime.cpu_count} CPUs, {memory}"
-            ),
+            f"│ Performance {', '.join(performance_parts)}",
             styled("╰" + line[1:], fg="cyan"),
         ]
 
@@ -172,6 +188,13 @@ class RunReporter:
         bird_species = record.get("num_bird_species")
         bird_detections = len(record.get("bird_detections") or [])
         birds_text = "off" if bird_species is None else f"{bird_species}sp/{bird_detections}det"
+        perch_species = record.get("num_perch_species")
+        perch_detections = len(record.get("perch_detections") or [])
+        perch_text = (
+            "off"
+            if perch_species is None
+            else f"{perch_species}sp/{perch_detections}det"
+        )
 
         if status == "resumed":
             result = "existing result reused"
@@ -186,10 +209,16 @@ class RunReporter:
                 "failed": "failed",
                 "disabled": "off",
             }.get(diarization_status, diarization_status)
-            result = (
-                f"speech={speech_text}  spk={speakers_text}  "
-                f"diar={diar_text}  birds={birds_text}"
-            )
+            result_parts = []
+            if speech is not None or diarization_status != "disabled":
+                result_parts.append(f"speech={speech_text}")
+                result_parts.append(f"spk={speakers_text}")
+                result_parts.append(f"diar={diar_text}")
+            if bird_species is not None:
+                result_parts.append(f"birdnet={birds_text}")
+            if perch_species is not None:
+                result_parts.append(f"perch={perch_text}")
+            result = "  ".join(result_parts) if result_parts else "completed"
 
         position = styled(f"[{idx:>4}/{self.total_files:,}]", fg="cyan", bold=True)
         pct = styled(f"{percent:5.1f}%", fg="cyan")
@@ -231,7 +260,8 @@ class RunReporter:
                 f"  completed {self.success_count:,}   resumed {self.resumed_count:,}   "
                 f"skipped {self.skipped_count:,}   diarization warnings "
                 f"{self.diarization_warning_count:,}   failed {self.failed_count:,}   "
-                f"elapsed {format_duration(total_elapsed)}   effective {effective_average:.2f}s/file   "
+                f"elapsed {format_duration(total_elapsed)}   "
+                f"effective {effective_average:.2f}s/file   "
                 f"throughput {throughput:.1f} files/hour"
             ),
         ]

@@ -25,16 +25,24 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e . --no-deps
-          python -m pip install numpy soundfile soxr pyyaml pandas click pytest ruff
+          python -m pip install numpy soundfile soxr pyyaml pandas click questionary pytest ruff
       - name: Lint changed release code
         run: >-
           ruff check
           src/cli/main.py
+          src/cli/init_wizard.py
           src/models/bird_detection.py
           src/models/bird_filter.py
+          src/models/perch_detection.py
           src/pipeline/config.py
+          src/pipeline/runner.py
+          src/pipeline/warmup.py
+          src/pipeline/reporting.py
           tests/test_v060.py
           tests/test_v070.py
+          tests/test_perch_experiment.py
+          tests/test_cli_init.py
+          tests/test_interactive_wizard.py
           --ignore SIM115,F841
       - name: Test
         run: pytest -q

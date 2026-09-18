@@ -59,6 +59,7 @@ class BirdDetectionResult:
     species_frequency_threshold: float | None = None
     sensitivity: float = 1.0
     overlap_sec: float = 0.0
+    allowed_species: set[str] | None = None
 
 
 @contextmanager
@@ -354,4 +355,5 @@ def run_bird_detection(audio: AudioData, cfg: BirdDetectionConfig) -> BirdDetect
         ),
         sensitivity=float(cfg.sensitivity),
         overlap_sec=float(cfg.overlap_sec),
+        allowed_species=allowed,
     )

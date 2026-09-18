@@ -62,6 +62,19 @@ class BirdDetectionConfig:
 
 
 @dataclass
+class PerchDetectionConfig:
+    enabled: bool = False
+    sample_rate: int = 32_000
+    min_confidence: float = 0.05
+    overlap_sec: float = 4.0
+    top_k: int = 5
+    device: str = "CPU"
+    batch_size: int = 8
+    apply_softmax: bool = True
+    use_birdnet_location_filter: bool = True
+
+
+@dataclass
 class PerformanceConfig:
     file_workers: int | str = "auto"
     max_file_workers: int = 4
@@ -96,6 +109,7 @@ class PipelineConfig:
     vad: VADConfig = field(default_factory=VADConfig)
     diarization: DiarizationConfig = field(default_factory=DiarizationConfig)
     bird_detection: BirdDetectionConfig = field(default_factory=BirdDetectionConfig)
+    perch_detection: PerchDetectionConfig = field(default_factory=PerchDetectionConfig)
     performance: PerformanceConfig = field(default_factory=PerformanceConfig)
     outputs: OutputsConfig = field(default_factory=OutputsConfig)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
@@ -114,12 +128,10 @@ def _build_section(cls: type, raw: dict | None, name: str, issues: list[str]):
     return cls(**{key: value for key, value in raw.items() if key in known})
 
 
-def load_config(path: Path) -> PipelineConfig:
-    logger.info("Loading config from %s", path)
-    with open(path) as fh:
-        raw = yaml.safe_load(fh) or {}
+def config_from_mapping(raw: dict) -> PipelineConfig:
+    """Build a typed pipeline config from an in-memory YAML-style mapping."""
     if not isinstance(raw, dict):
-        raise ValueError("Top-level YAML config must be a mapping/object")
+        raise ValueError("Top-level config must be a mapping/object")
 
     issues: list[str] = []
     top_level = {
@@ -131,6 +143,7 @@ def load_config(path: Path) -> PipelineConfig:
         "vad",
         "diarization",
         "bird_detection",
+        "perch_detection",
         "performance",
         "outputs",
         "logging",
@@ -151,6 +164,9 @@ def load_config(path: Path) -> PipelineConfig:
         bird_detection=_build_section(
             BirdDetectionConfig, raw.get("bird_detection"), "bird_detection", issues
         ),
+        perch_detection=_build_section(
+            PerchDetectionConfig, raw.get("perch_detection"), "perch_detection", issues
+        ),
         performance=_build_section(
             PerformanceConfig, raw.get("performance"), "performance", issues
         ),
@@ -158,6 +174,15 @@ def load_config(path: Path) -> PipelineConfig:
         logging=_build_section(LoggingConfig, raw.get("logging"), "logging", issues),
         validation_issues=issues,
     )
+
+
+def load_config(path: Path) -> PipelineConfig:
+    logger.info("Loading config from %s", path)
+    with open(path) as fh:
+        raw = yaml.safe_load(fh) or {}
+    if not isinstance(raw, dict):
+        raise ValueError("Top-level YAML config must be a mapping/object")
+    return config_from_mapping(raw)
 
 
 def _positive_int_or_auto(value: int | str) -> bool:
@@ -208,6 +233,26 @@ def validate_config(cfg: PipelineConfig) -> list[str]:
         errors.append("bird_detection.threads must be 'auto' or an integer >= 1")
     if cfg.bird_detection.batch_size < 1:
         errors.append("bird_detection.batch_size must be >= 1")
+    if cfg.perch_detection.sample_rate != 32_000:
+        errors.append("perch_detection.sample_rate must be 32000 for Perch v2")
+    if not 0.0 <= cfg.perch_detection.min_confidence <= 1.0:
+        errors.append("perch_detection.min_confidence must be in [0, 1]")
+    if not 0 <= cfg.perch_detection.overlap_sec < 5.0:
+        errors.append("perch_detection.overlap_sec must be in [0, 5)")
+    if cfg.perch_detection.top_k < 1:
+        errors.append("perch_detection.top_k must be >= 1")
+    if cfg.perch_detection.device not in {"CPU", "GPU"}:
+        errors.append("perch_detection.device must be 'CPU' or 'GPU'")
+    if cfg.perch_detection.batch_size < 1:
+        errors.append("perch_detection.batch_size must be >= 1")
+    if (
+        cfg.perch_detection.enabled
+        and cfg.perch_detection.use_birdnet_location_filter
+        and not cfg.bird_detection.enabled
+    ):
+        errors.append(
+            "perch_detection.use_birdnet_location_filter requires bird_detection.enabled"
+        )
     if not _positive_int_or_auto(cfg.performance.file_workers):
         errors.append("performance.file_workers must be 'auto' or an integer >= 1")
     if cfg.performance.max_file_workers < 1:
