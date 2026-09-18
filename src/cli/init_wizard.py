@@ -527,3 +527,224 @@ def run_init_wizard(
     print()
 
     return config_path
+
+
+
+def _discover_configs(config_dir: Path = Path("configs")) -> list[Path]:
+    """Return selectable YAML configs from the project config directory."""
+    if not config_dir.is_dir():
+        return []
+    return sorted(
+        [
+            *config_dir.glob("*.yaml"),
+            *config_dir.glob("*.yml"),
+        ],
+        key=lambda path: path.name.lower(),
+    )
+
+
+def _stages_from_pipeline_config(cfg) -> set[str]:
+    stages: set[str] = set()
+    if cfg.vad.enabled:
+        stages.add("vad")
+    if cfg.diarization.enabled:
+        stages.add("diarization")
+    if cfg.bird_detection.enabled:
+        stages.add("birdnet")
+    if cfg.perch_detection.enabled:
+        stages.add("perch")
+    return stages
+
+
+def _stage_names(stages: set[str]) -> str:
+    stages = normalize_stages(stages)
+    names: list[str] = []
+    if "vad" in stages:
+        names.append("Silero VAD")
+    if "diarization" in stages:
+        names.append("diarization")
+    if "birdnet" in stages:
+        names.append("BirdNET")
+    if "perch" in stages:
+        names.append("Perch v2")
+    return " → ".join(names) if names else "QC only"
+
+
+def _choose_pipeline(questionary, configured_stages: set[str] | None = None) -> set[str]:
+    choices = []
+    if configured_stages is not None:
+        choices.append(
+            questionary.Choice(
+                f"As configured — {_stage_names(configured_stages)}",
+                value="configured",
+            )
+        )
+    choices.extend(
+        [
+            questionary.Choice(
+                "Standard — speech + speakers + BirdNET",
+                value="standard",
+            ),
+            questionary.Choice("Bird monitoring — BirdNET only", value="birds"),
+            questionary.Choice(
+                "Experiment A — BirdNET + Perch v2",
+                value="compare",
+            ),
+            questionary.Choice("Custom pipeline — choose stages", value="custom"),
+        ]
+    )
+
+    preset = _select(questionary, "Choose a pipeline:", choices=choices).ask()
+    if preset is None:
+        raise KeyboardInterrupt
+
+    if preset == "configured":
+        return normalize_stages(configured_stages or set())
+    if preset != "custom":
+        return normalize_stages(set(PRESETS[preset]))
+
+    selected = _checkbox(
+        questionary,
+        "Select pipeline stages:",
+        choices=[
+            questionary.Choice("Silero VAD — human speech", value="vad"),
+            questionary.Choice(
+                "Speaker diarization — who spoke when",
+                value="diarization",
+            ),
+            questionary.Choice("BirdNET V2.4", value="birdnet"),
+            questionary.Choice("Perch v2", value="perch"),
+        ],
+    ).ask()
+    if selected is None:
+        raise KeyboardInterrupt
+    return normalize_stages(set(selected))
+
+
+def _apply_pipeline_to_config(cfg, stages: set[str]) -> None:
+    stages = normalize_stages(stages)
+    cfg.vad.enabled = "vad" in stages
+    cfg.diarization.enabled = "diarization" in stages
+    cfg.bird_detection.enabled = "birdnet" in stages
+    cfg.perch_detection.enabled = "perch" in stages
+
+    if cfg.perch_detection.enabled:
+        cfg.performance.file_workers = 1
+        cfg.performance.max_file_workers = 1
+
+    if not cfg.bird_detection.enabled:
+        cfg.perch_detection.use_birdnet_location_filter = False
+
+
+def _custom_config_for_pipeline(questionary, stages: set[str]):
+    from pipeline.config import config_from_mapping
+
+    input_dir = _text(questionary, "Audio input directory:", default="data/").ask()
+    output_dir = _text(questionary, "Results directory:", default="outputs/").ask()
+    if input_dir is None or output_dir is None:
+        raise KeyboardInterrupt
+
+    raw = build_config(stages=stages, input_dir=input_dir, output_dir=output_dir)
+
+    detail = _select(
+        questionary,
+        "Configuration:",
+        choices=[
+            questionary.Choice("Recommended — tested defaults", value="recommended"),
+            questionary.Choice(
+                "Advanced — choose thresholds and outputs",
+                value="advanced",
+            ),
+        ],
+    ).ask()
+    if detail is None:
+        raise KeyboardInterrupt
+
+    _configure_location(questionary, raw)
+    if detail == "advanced":
+        _configure_advanced(questionary, raw)
+
+    if _confirm(questionary, "Save this configuration?", default=True).ask():
+        selected_path = _text(
+            questionary,
+            "Save as:",
+            default="configs/custom.yaml",
+        ).ask()
+        if selected_path is None:
+            raise KeyboardInterrupt
+        save_path = Path(selected_path)
+        overwrite = True
+        if save_path.exists():
+            overwrite = bool(
+                _confirm(
+                    questionary,
+                    f"{save_path} already exists. Overwrite it?",
+                    default=False,
+                ).ask()
+            )
+        if overwrite:
+            _write_config(save_path, raw, force=True)
+            print(f"  ✓ Saved config: {save_path}")
+
+    return config_from_mapping(raw)
+
+
+def run_interactive_wizard():
+    """Choose a config, choose a pipeline, then return a ready-to-run config."""
+    try:
+        import questionary
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(
+            "The interactive setup requires questionary. "
+            "Reinstall WildEcho with its current dependencies."
+        ) from exc
+
+    from pipeline.config import load_config, validate_config
+
+    _play_intro()
+
+    configs = _discover_configs()
+    choices = [
+        questionary.Choice(path.name, value=path)
+        for path in configs
+    ]
+    choices.append(
+        questionary.Choice(
+            "Custom configuration",
+            value="custom",
+        )
+    )
+
+    selected = _select(
+        questionary,
+        "Choose a configuration:",
+        choices=choices,
+    ).ask()
+    if selected is None:
+        raise KeyboardInterrupt
+
+    if selected == "custom":
+        stages = _choose_pipeline(questionary)
+        cfg = _custom_config_for_pipeline(questionary, stages)
+        source_label = "Custom"
+    else:
+        config_path = Path(selected)
+        cfg = load_config(config_path)
+        stages = _choose_pipeline(
+            questionary,
+            configured_stages=_stages_from_pipeline_config(cfg),
+        )
+        _apply_pipeline_to_config(cfg, stages)
+        source_label = str(config_path)
+
+    errors = validate_config(cfg)
+    if errors:
+        raise ValueError("; ".join(errors))
+
+    print()
+    print(f"  Config:   {source_label}")
+    print(f"  Pipeline: {_stage_names(_stages_from_pipeline_config(cfg))}")
+    print("  Starting WildEcho…")
+    print()
+
+    return cfg
