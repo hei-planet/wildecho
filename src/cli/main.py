@@ -50,6 +50,23 @@ def init_config(config_path: Path | None, force: bool) -> None:
     _launch_init(config_path=config_path, force=force)
 
 
+
+def _default_config_path() -> Path:
+    """Use the most recently generated config, then fall back to repo defaults."""
+    state_path = Path(".wildecho/last-config")
+    if state_path.is_file():
+        saved = state_path.read_text(encoding="utf-8").strip()
+        if saved:
+            candidate = Path(saved)
+            if candidate.is_file():
+                return candidate
+    return Path("configs/default.yaml")
+
+
+def _resolve_config_path(config: Path | None) -> Path:
+    return config if config is not None else _default_config_path()
+
+
 def _validated_config(path: Path):
     """Load a config and exit with readable errors when it is invalid."""
     try:
@@ -70,14 +87,16 @@ def _validated_config(path: Path):
     "--config",
     "-c",
     type=click.Path(exists=True, path_type=Path),
-    default="configs/default.yaml",
-    help="Path to YAML config file.",
+    default=None,
+    help="Path to YAML config file. Defaults to the last config created by wildecho.",
 )
-def run(config: Path) -> None:
+def run(config: Path | None) -> None:
     """Run the full pipeline on all files in the configured input directory."""
     from pipeline.runner import run_pipeline
 
-    run_pipeline(_validated_config(config))
+    config_path = _resolve_config_path(config)
+    click.echo(f"Using config: {config_path}")
+    run_pipeline(_validated_config(config_path))
 
 
 @main.command(name="run-file")
@@ -85,8 +104,8 @@ def run(config: Path) -> None:
     "--config",
     "-c",
     type=click.Path(exists=True, path_type=Path),
-    default="configs/default.yaml",
-    help="Path to YAML config file.",
+    default=None,
+    help="Path to YAML config file. Defaults to the last config created by wildecho.",
 )
 @click.option(
     "--file",
@@ -96,12 +115,12 @@ def run(config: Path) -> None:
     required=True,
     help="Path to a single audio file to process.",
 )
-def run_file(config: Path, file_path: Path) -> None:
+def run_file(config: Path | None, file_path: Path) -> None:
     """Run the pipeline on a single audio file."""
     from pipeline.runner import process_file
     from pipeline.utils import setup_logging
 
-    cfg = _validated_config(config)
+    cfg = _validated_config(_resolve_config_path(config))
     cfg.output_dir.mkdir(parents=True, exist_ok=True)
     setup_logging(cfg.logging)
     record = process_file(file_path, cfg)
