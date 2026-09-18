@@ -12,7 +12,7 @@ from pipeline.utils import load_dotenv
 
 
 def _launch_init(config_path: Path | None = None, force: bool = False) -> None:
-    """Launch the interactive pipeline builder with consistent error handling."""
+    """Launch the config-only initializer with consistent error handling."""
     from cli.init_wizard import run_init_wizard
 
     try:
@@ -25,6 +25,41 @@ def _launch_init(config_path: Path | None = None, force: bool = False) -> None:
         raise click.exceptions.Exit(1) from exc
 
 
+def _run_pipeline_safely(cfg) -> None:
+    """Run a configured pipeline without exposing dependency tracebacks to users."""
+    from pipeline.runner import run_pipeline
+
+    try:
+        run_pipeline(cfg)
+    except KeyboardInterrupt as exc:
+        click.echo("\nRun cancelled.", err=True)
+        raise click.exceptions.Exit(130) from exc
+    except (ModuleNotFoundError, RuntimeError) as exc:
+        click.secho(f"\n✗ Startup failed: {exc}", fg="red", bold=True, err=True)
+        click.echo(
+            "Reinstall the current WildEcho checkout with: "
+            "uv tool install --reinstall -e .",
+            err=True,
+        )
+        raise click.exceptions.Exit(1) from exc
+
+
+def _launch_interactive_run() -> None:
+    """Choose config + pipeline interactively, then start immediately."""
+    from cli.init_wizard import run_interactive_wizard
+
+    try:
+        cfg = run_interactive_wizard()
+    except KeyboardInterrupt as exc:
+        click.echo("\nSetup cancelled.", err=True)
+        raise click.exceptions.Exit(1) from exc
+    except (FileExistsError, RuntimeError, ValueError) as exc:
+        click.echo(f"Setup error: {exc}", err=True)
+        raise click.exceptions.Exit(1) from exc
+
+    _run_pipeline_safely(cfg)
+
+
 @click.group(invoke_without_command=True, no_args_is_help=False)
 @click.version_option(package_name="wildecho")
 @click.pass_context
@@ -32,7 +67,7 @@ def main(ctx: click.Context) -> None:
     """WildEcho — build and run acoustic analysis pipelines."""
     load_dotenv(".env")
     if ctx.invoked_subcommand is None:
-        _launch_init()
+        _launch_interactive_run()
 
 
 @main.command(name="init")
@@ -92,11 +127,9 @@ def _validated_config(path: Path):
 )
 def run(config: Path | None) -> None:
     """Run the full pipeline on all files in the configured input directory."""
-    from pipeline.runner import run_pipeline
-
     config_path = _resolve_config_path(config)
     click.echo(f"Using config: {config_path}")
-    run_pipeline(_validated_config(config_path))
+    _run_pipeline_safely(_validated_config(config_path))
 
 
 @main.command(name="run-file")
