@@ -273,7 +273,6 @@ def _run_serial(
     reporter: RunReporter,
     pipeline_start: float,
 ) -> list[dict]:
-    warmup(cfg)
     logger.info("Processing files")
     records: list[dict] = []
     for completed, file_path in enumerate(files, start=1):
@@ -384,6 +383,7 @@ def run_pipeline(cfg: PipelineConfig) -> list[dict]:
     for line in reporter.header(cfg, _package_version(), runtime):
         logger.info(line)
     logger.info(reporter.warmup_header())
+    warmup(cfg)
 
     if runtime.file_workers == 1:
         records = _run_serial(files, cfg, reporter, pipeline_start)
