@@ -22,6 +22,7 @@ dependencies = [
     "birdnetlib>=0.16",
     "ai-edge-litert>=2.1",
     "audioop-lts>=0.2.2; python_version >= '3.13'",
+    "audioread>=3.0.1",
     "birdnet[tf]==1.1.1",
     "click>=8.1",
     "questionary>=2.1",
