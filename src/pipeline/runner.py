@@ -14,6 +14,7 @@ from pathlib import Path
 
 from models.bird_detection import BirdDetectionResult, run_bird_detection
 from models.diarization import DiarizationResult, run_diarization
+from models.perch_detection import PerchDetectionResult, run_perch_detection
 from models.vad import VADResult, run_vad
 from pipeline.config import PipelineConfig
 from pipeline.outputs import (
@@ -66,6 +67,7 @@ def _analysis_fingerprint(cfg: PipelineConfig) -> str:
         "vad": asdict(cfg.vad),
         "diarization": asdict(cfg.diarization),
         "bird_detection": bird_detection,
+        "perch_detection": asdict(cfg.perch_detection),
         "resampler": cfg.performance.resampler,
         "outputs": asdict(cfg.outputs),
     }
@@ -185,6 +187,27 @@ def process_file(file_path: Path, cfg: PipelineConfig) -> dict:
         bird_result = run_bird_detection(audio_for_birds, cfg.bird_detection)
         timings["bird_detection"] = _elapsed(stage_start)
 
+    perch_result: PerchDetectionResult | None = None
+    if cfg.perch_detection.enabled:
+        stage_start = time.perf_counter()
+        audio_for_perch = resample(
+            audio,
+            cfg.perch_detection.sample_rate,
+            method=cfg.performance.resampler,
+        )
+        timings["perch_resample"] = _elapsed(stage_start)
+
+        stage_start = time.perf_counter()
+        perch_result = run_perch_detection(
+            audio_for_perch,
+            cfg.perch_detection,
+            allowed_birdnet_species=(
+                bird_result.allowed_species if bird_result is not None else None
+            ),
+            week_48=bird_result.week_48 if bird_result is not None else None,
+        )
+        timings["perch_detection"] = _elapsed(stage_start)
+
     stage_start = time.perf_counter()
     record = build_file_record(
         qc_result,
@@ -192,6 +215,7 @@ def process_file(file_path: Path, cfg: PipelineConfig) -> dict:
         diarization_result,
         bird_result,
         cfg.outputs,
+        perch=perch_result,
     )
     timings["record_build"] = _elapsed(stage_start)
     record["processing_status"] = "completed"
@@ -383,6 +407,12 @@ def run_pipeline(cfg: PipelineConfig) -> list[dict]:
         logger.info(line)
     logger.info("Results: %s", cfg.output_dir)
     if cfg.outputs.readable_csvs:
-        logger.info("Reports: recordings.csv, bird_detections.csv, speech_segments.csv")
+        if cfg.perch_detection.enabled:
+            logger.info(
+                "Reports: recordings.csv, bird_detections.csv, perch_detections.csv, "
+                "bird_model_comparison.csv, speech_segments.csv"
+            )
+        else:
+            logger.info("Reports: recordings.csv, bird_detections.csv, speech_segments.csv")
     logger.info("Log:     %s", cfg.output_dir / "pipeline.log")
     return records
