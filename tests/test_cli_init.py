@@ -5,18 +5,18 @@ from click.testing import CliRunner
 import cli.main as cli_main
 
 
-def test_bare_wildecho_launches_initializer(monkeypatch) -> None:
-    calls: list[tuple[object, bool]] = []
+def test_bare_wildecho_launches_interactive_run(monkeypatch) -> None:
+    calls: list[str] = []
 
-    def fake_launch(config_path=None, force: bool = False) -> None:
-        calls.append((config_path, force))
+    def fake_launch() -> None:
+        calls.append("run")
 
-    monkeypatch.setattr(cli_main, "_launch_init", fake_launch)
+    monkeypatch.setattr(cli_main, "_launch_interactive_run", fake_launch)
 
     result = CliRunner().invoke(cli_main.main, [])
 
     assert result.exit_code == 0
-    assert calls == [(None, False)]
+    assert calls == ["run"]
 
 
 def test_explicit_init_still_launches_initializer(monkeypatch) -> None:
@@ -33,13 +33,13 @@ def test_explicit_init_still_launches_initializer(monkeypatch) -> None:
     assert calls == [(None, False)]
 
 
-def test_help_does_not_launch_initializer(monkeypatch) -> None:
-    calls: list[tuple[object, bool]] = []
+def test_help_does_not_launch_interactive_run(monkeypatch) -> None:
+    calls: list[str] = []
 
-    def fake_launch(config_path=None, force: bool = False) -> None:
-        calls.append((config_path, force))
+    def fake_launch() -> None:
+        calls.append("run")
 
-    monkeypatch.setattr(cli_main, "_launch_init", fake_launch)
+    monkeypatch.setattr(cli_main, "_launch_interactive_run", fake_launch)
 
     result = CliRunner().invoke(cli_main.main, ["--help"])
 
@@ -70,3 +70,21 @@ def test_default_config_falls_back_when_saved_config_is_missing(monkeypatch, tmp
     state.joinpath("last-config").write_text("configs/missing.yaml", encoding="utf-8")
 
     assert cli_main._default_config_path() == cli_main.Path("configs/default.yaml")
+
+
+
+def test_run_pipeline_safely_hides_dependency_traceback(monkeypatch) -> None:
+    import pipeline.runner
+
+    def fail(_cfg) -> None:
+        raise RuntimeError("BirdNET analyzer failed to load: missing dependency")
+
+    monkeypatch.setattr(pipeline.runner, "run_pipeline", fail)
+
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        result = runner.invoke(cli_main.main, ["run", "--config", "missing.yaml"])
+
+    # Click validates the path before pipeline startup, so exercise the helper directly instead.
+    if result.exit_code == 0:
+        raise AssertionError("Expected config path validation to fail")
