@@ -18,6 +18,7 @@ _STAGE_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("VAD", ("vad_resample", "vad")),
     ("diar", ("diarization_resample", "diarization")),
     ("BirdNET", ("bird_resample", "bird_detection")),
+    ("Perch", ("perch_resample", "perch_detection")),
     ("output", ("record_build", "json_write")),
 )
 
@@ -31,6 +32,8 @@ _STAGE_DETAILS: tuple[tuple[str, str], ...] = (
     ("diarization", "speaker diarization"),
     ("bird_resample", "BirdNET resample"),
     ("bird_detection", "BirdNET analysis"),
+    ("perch_resample", "Perch resample"),
+    ("perch_detection", "Perch analysis"),
     ("record_build", "result assembly"),
     ("json_write", "JSON write"),
 )
@@ -98,6 +101,7 @@ class RunReporter:
                 (f"Silero VAD/{cfg.vad.backend.upper()}", cfg.vad.enabled),
                 ("speaker diarization", cfg.diarization.enabled),
                 ("BirdNET", cfg.bird_detection.enabled),
+                ("Perch v2", cfg.perch_detection.enabled),
             )
             if enabled
         ]
@@ -172,6 +176,13 @@ class RunReporter:
         bird_species = record.get("num_bird_species")
         bird_detections = len(record.get("bird_detections") or [])
         birds_text = "off" if bird_species is None else f"{bird_species}sp/{bird_detections}det"
+        perch_species = record.get("num_perch_species")
+        perch_detections = len(record.get("perch_detections") or [])
+        perch_text = (
+            "off"
+            if perch_species is None
+            else f"{perch_species}sp/{perch_detections}det"
+        )
 
         if status == "resumed":
             result = "existing result reused"
@@ -186,10 +197,16 @@ class RunReporter:
                 "failed": "failed",
                 "disabled": "off",
             }.get(diarization_status, diarization_status)
-            result = (
-                f"speech={speech_text}  spk={speakers_text}  "
-                f"diar={diar_text}  birds={birds_text}"
-            )
+            result_parts = []
+            if speech is not None or diarization_status != "disabled":
+                result_parts.append(f"speech={speech_text}")
+                result_parts.append(f"spk={speakers_text}")
+                result_parts.append(f"diar={diar_text}")
+            if bird_species is not None:
+                result_parts.append(f"birdnet={birds_text}")
+            if perch_species is not None:
+                result_parts.append(f"perch={perch_text}")
+            result = "  ".join(result_parts) if result_parts else "completed"
 
         position = styled(f"[{idx:>4}/{self.total_files:,}]", fg="cyan", bold=True)
         pct = styled(f"{percent:5.1f}%", fg="cyan")
