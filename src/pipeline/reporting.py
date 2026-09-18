@@ -260,7 +260,8 @@ class RunReporter:
                 f"  completed {self.success_count:,}   resumed {self.resumed_count:,}   "
                 f"skipped {self.skipped_count:,}   diarization warnings "
                 f"{self.diarization_warning_count:,}   failed {self.failed_count:,}   "
-                f"elapsed {format_duration(total_elapsed)}   effective {effective_average:.2f}s/file   "
+                f"elapsed {format_duration(total_elapsed)}   "
+                f"effective {effective_average:.2f}s/file   "
                 f"throughput {throughput:.1f} files/hour"
             ),
         ]
