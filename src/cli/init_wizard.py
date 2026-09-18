@@ -3,10 +3,82 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import os
 from pathlib import Path
+import sys
+import time
 from typing import Any
 
 import yaml
+
+_BIRD_FRAMES = (
+    (
+        "        __      ",
+        "   ___ ( o)>    ",
+        "   \\ <_. )     ",
+        "    \\  /       ",
+        "     \\/        ",
+    ),
+    (
+        "        __      ",
+        "    __ ( o)>    ",
+        "   /  <_. )     ",
+        "  /   /         ",
+        "      /          ",
+    ),
+    (
+        "        __      ",
+        "   ___ ( o)>    ",
+        "   / <_. )      ",
+        "  /   /         ",
+        "     /           ",
+    ),
+)
+
+_FINAL_BIRD = (
+    "        __      ",
+    "   ___ ( o)>    ",
+    "   \\ <_. )     ",
+    "    \\  /       ",
+    "     \\/        ",
+)
+
+
+def _animation_enabled() -> bool:
+    return (
+        sys.stdout.isatty()
+        and os.environ.get("WILDECHO_NO_ANIMATION") is None
+        and os.environ.get("CI") is None
+    )
+
+
+def _render_bird(lines: tuple[str, ...]) -> None:
+    print("\n".join(f"  {line}" for line in lines), flush=True)
+
+
+def _clear_bird_frame(line_count: int) -> None:
+    # Move back up and clear only the mascot lines, leaving the terminal intact.
+    sys.stdout.write(f"\x1b[{line_count}A")
+    for index in range(line_count):
+        sys.stdout.write("\r\x1b[2K")
+        if index < line_count - 1:
+            sys.stdout.write("\x1b[1B")
+    sys.stdout.write(f"\x1b[{line_count - 1}A")
+    sys.stdout.flush()
+
+
+def _play_intro() -> None:
+    if _animation_enabled():
+        for frame in _BIRD_FRAMES:
+            _render_bird(frame)
+            time.sleep(0.14)
+            _clear_bird_frame(len(frame))
+    _render_bird(_FINAL_BIRD)
+    print()
+    print("  WildEcho")
+    print("  listen to the wild")
+    print()
+
 
 _STYLE_RULES = [
     ("qmark", "fg:ansicyan bold"),
@@ -356,10 +428,7 @@ def run_init_wizard(
             "Reinstall WildEcho with its current dependencies."
         ) from exc
 
-    print()
-    print("  WildEcho")
-    print("  Build your acoustic pipeline")
-    print()
+    _play_intro()
 
     input_dir = _text(questionary, "Audio input directory:", default="data/").ask()
     output_dir = _text(questionary, "Results directory:", default="outputs/").ask()
