@@ -149,7 +149,10 @@ def process_file(file_path: Path, cfg: PipelineConfig) -> dict:
     if cfg.diarization.enabled and vad_result is not None:
         if vad_result.speech_detected:
             stage_start = time.perf_counter()
-            if audio_for_vad is not None and audio_for_vad.sample_rate == cfg.diarization.sample_rate:
+            if (
+                audio_for_vad is not None
+                and audio_for_vad.sample_rate == cfg.diarization.sample_rate
+            ):
                 audio_for_diarization = audio_for_vad
             else:
                 audio_for_diarization = resample(
